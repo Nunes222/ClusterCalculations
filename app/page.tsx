@@ -32,19 +32,29 @@ const clusters = {
     "Pitarco 3": 9,
   },
 };
+type ClusterName = keyof typeof clusters;
+type ParkName = keyof (typeof clusters)[ClusterName];
+
+
+type Allocation = {
+  [key: string]: {
+    type: "fixed" | "dynamic";
+    value: number;
+  };
+};
 
 export default function SolarEnergyWebApp() {
-  const [cluster, setCluster] = useState("NEOEN");
-  const [energyLimit, setEnergyLimit] = useState(100);
-  const [battery, setBattery] = useState(0);
-  const [isPereiro2Fixed, setIsPereiro2Fixed] = useState(true);
-  const [pereiro2Energy, setPereiro2Energy] = useState(10);
-  const [allocation, setAllocation] = useState(null);
-  const [commsState, setCommsState] = useState({});
+  const [cluster, setCluster] = useState<ClusterName>("NEOEN");
+  const [energyLimit, setEnergyLimit] = useState<number>(100);
+  const [battery, setBattery] = useState<number>(0);
+  const [isPereiro2Fixed, setIsPereiro2Fixed] = useState<boolean>(true);
+  const [pereiro2Energy, setPereiro2Energy] = useState<number>(10);
+  const [allocation, setAllocation] = useState<Allocation | null>(null);
+  const [commsState, setCommsState] = useState<Record<string, boolean>>({});
 
   const parks = clusters[cluster];
 
-  const handleCommsToggle = (park) => {
+  const handleCommsToggle = (park: string) => {
     setCommsState((prev) => ({
       ...prev,
       [park]: prev[park] === undefined ? false : !prev[park],
@@ -56,18 +66,16 @@ export default function SolarEnergyWebApp() {
 
     let availableEnergy = energyLimit - battery;
     let fixedOutput = 0;
-    let dynamicParks = {};
+    let dynamicParks: Record<string, number> = {};
 
     if (cluster === "Alcoutim") {
       const isPereiroComms = commsState["Pereiro"] ?? true;
 
       if (isPereiro2Fixed) {
-        // Add Pereiro2 fixed energy to Pereiro
         clusterParks.Pereiro += pereiro2Energy;
-        fixedOutput += pereiro2Energy; // This portion is fixed
+        fixedOutput += pereiro2Energy;
       } else {
-        // Add Pereiro2 nominal to Pereiro
-        clusterParks.Pereiro += clusters["Alcoutim"].Pereiro2;
+        clusterParks.Pereiro += clusters.Alcoutim.Pereiro2;
       }
 
       delete clusterParks.Pereiro2;
@@ -85,12 +93,13 @@ export default function SolarEnergyWebApp() {
     availableEnergy = Math.max(0, availableEnergy - fixedOutput);
 
     const totalDynamicPower = Object.values(dynamicParks).reduce((a, b) => a + b, 0);
-    const dynamicAllocation = {};
+    const dynamicAllocation: Record<string, number> = {};
+
     for (const [park, power] of Object.entries(dynamicParks)) {
       dynamicAllocation[park] = Math.max(0, (power / totalDynamicPower) * availableEnergy);
     }
 
-    const fullAllocation = {};
+    const fullAllocation: Allocation = {};
     for (const [park, power] of Object.entries(clusterParks)) {
       if (dynamicAllocation[park] !== undefined) {
         fullAllocation[park] = {
@@ -114,13 +123,10 @@ export default function SolarEnergyWebApp() {
 
       <div className="space-y-2">
         <label className="block text-sm font-medium">Select a cluster</label>
-        <Select
-          value={cluster}
-          onValueChange={(value) => {
-            setCluster(value);
-            setCommsState({});
-          }}
-        >
+        <Select value={cluster} onValueChange={(value) => {
+          setCluster(value as keyof typeof clusters);
+          setCommsState({});
+        }}>
           <SelectTrigger>
             <SelectValue placeholder="Select a cluster" />
           </SelectTrigger>
@@ -140,7 +146,6 @@ export default function SolarEnergyWebApp() {
           type="number"
           value={energyLimit}
           onChange={(e) => setEnergyLimit(Number(e.target.value))}
-          placeholder="Total energy limit (MWh)"
         />
       </div>
 
@@ -154,7 +159,6 @@ export default function SolarEnergyWebApp() {
               type="number"
               value={battery}
               onChange={(e) => setBattery(Number(e.target.value))}
-              placeholder="Battery contribution (MWh)"
             />
           </div>
 
@@ -173,7 +177,7 @@ export default function SolarEnergyWebApp() {
 
       <div className="space-y-2">
         <label className="block text-sm font-medium">Park Communication State</label>
-        {Object.keys(clusters[cluster]).map((park) => {
+        {Object.keys(parks).map((park) => {
           if (cluster === "Alcoutim" && park === "Pereiro2") return null;
           return (
             <div key={park} className="flex items-center space-x-2">
