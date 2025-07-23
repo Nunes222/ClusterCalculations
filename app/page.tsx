@@ -68,18 +68,21 @@ export default function SolarEnergyWebApp() {
     let fixedOutput = 0;
     let dynamicParks: Record<string, number> = {};
 
-    if (cluster === "Alcoutim") {
-      const isPereiroComms = commsState["Pereiro"] ?? true;
+  if (cluster === "Alcoutim") {
+    const alcoutimParks = clusterParks as typeof clusters["Alcoutim"];
 
-      if (isPereiro2Fixed) {
-        clusterParks.Pereiro += pereiro2Energy;
-        fixedOutput += pereiro2Energy;
-      } else {
-        clusterParks.Pereiro += clusters.Alcoutim.Pereiro2;
-      }
-
-      delete clusterParks.Pereiro2;
+    if (isPereiro2Fixed) {
+      alcoutimParks.Pereiro += pereiro2Energy;
+      fixedOutput += pereiro2Energy;
+    } else {
+      alcoutimParks.Pereiro += clusters.Alcoutim.Pereiro2;
     }
+
+    // Cast to any to suppress error on delete
+    delete (alcoutimParks as any).Pereiro2;
+  }
+
+
 
     for (const [park, power] of Object.entries(clusterParks)) {
       const comms = commsState[park] ?? true;
