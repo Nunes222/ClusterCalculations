@@ -144,7 +144,7 @@ export default function SolarEnergyWebApp() {
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium">Total energy limit (MWh)</label>
+        <label className="block text-sm font-medium">Total energy limit (MW)</label>
         <Input
           type="number"
           value={energyLimit}
@@ -156,7 +156,7 @@ export default function SolarEnergyWebApp() {
         <>
           <div className="space-y-2">
             <label className="block text-sm font-medium">
-              Battery contribution (MWh)
+              Battery contribution (MW)
             </label>
             <Input
               type="number"
@@ -206,7 +206,7 @@ export default function SolarEnergyWebApp() {
               .map(([park, info]) => (
                 <div key={park} className="flex justify-between">
                   <span>{park}</span>
-                  <span>{info.value.toFixed(2)} MWh</span>
+                  <span>{info.value.toFixed(2)} MW</span>
                 </div>
               ))}
 
@@ -216,7 +216,7 @@ export default function SolarEnergyWebApp() {
               .map(([park, info]) => (
                 <div key={park} className="flex justify-between text-gray-500">
                   <span>{park}</span>
-                  <span>{info.value.toFixed(2)} MWh (Fixed)</span>
+                  <span>{info.value.toFixed(2)} MW (Fixed)</span>
                 </div>
               ))}
           </CardContent>
