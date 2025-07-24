@@ -1,4 +1,5 @@
 "use client";
+import ThemeToggle from "@/components/ui/ThemeToggle"; 
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -144,7 +145,7 @@ export default function SolarEnergyWebApp() {
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium">Total energy limit (MW)</label>
+        <label className="block text-sm font-medium">Power Setpoint to apply (MW)</label>
         <Input
           type="number"
           value={energyLimit}
@@ -179,7 +180,7 @@ export default function SolarEnergyWebApp() {
       )}
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium">Park Communication State</label>
+        <label className="block text-sm font-medium">Park Communication State - uncheck if park can't be controlled</label>
         {Object.keys(parks).map((park) => {
           if (cluster === "Alcoutim" && park === "Pereiro2") return null;
           return (
@@ -222,6 +223,8 @@ export default function SolarEnergyWebApp() {
           </CardContent>
         </Card>
       )}
+      <ThemeToggle />
+
     </div>
   );
 }
