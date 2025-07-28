@@ -197,9 +197,13 @@ export default function SolarEnergyWebApp() {
       </div>
 
       <Button onClick={calculate}>Allocate Energy</Button>
-      <Button> {<Link href="/curtailment">Curtailment Planner</Link>}</Button>  
+
+          <div>
+              <Button> {<Link href="/curtailment">Curtailment Planner</Link>}</Button>  
+          </div>
       {allocation && (
         <Card>
+
           <CardContent className="p-4 space-y-2">
             <div className="font-semibold">Dynamic Parks</div>
             {Object.entries(allocation)
@@ -221,10 +225,13 @@ export default function SolarEnergyWebApp() {
                 </div>
               ))}
           </CardContent>
+          
         </Card>
         
       )}
-      <ThemeToggle />
+      <div>Toggle Dark/Light Mode<ThemeToggle /></div>
+      
+      
 
     </div>
   );

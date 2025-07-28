@@ -18,11 +18,13 @@ export default function ThemeToggle() {
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
       aria-label="Toggle Dark Mode"
     >
+      
       {theme === "dark" ? (
         <Sun className="w-5 h-5 text-yellow-400" />
       ) : (
         <Moon className="w-5 h-5 text-gray-800" />
       )}
+      <label className="block text-sm font-small">Dark/Light</label>
     </button>
   );
 }

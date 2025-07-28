@@ -1,5 +1,5 @@
 "use client";
-
+import Link from "next/link";
 import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,54 @@ export default function CurtailmentPlanner() {
 
   const convertToCSV = () => {
     const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
-    if (lines.length < 3) {
-      setOutput("Invalid input format. Must have at least 3 lines.");
+    if (lines.length < 2) {
+      setOutput("Invalid input format.");
+      return;
+    }
+
+    let csvRows: string[] = [
+      "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
+    ];
+
+    const isEmailFormat =
+      lines[0].toLowerCase().includes("activo") &&
+      lines[0].toLowerCase().includes("setpoint");
+
+    if (isEmailFormat) {
+      const baseDate = new Date("2025-07-28T00:00:00");
+
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split("\t");
+        if (parts.length < 5) continue;
+
+        const rawNames = parts[0]
+          .replace(/ e /gi, ",")
+          .split(",")
+          .map((s) => s.trim().toUpperCase());
+
+        const startTime = parts[2].trim();
+        const endTime = parts[3].trim();
+        const rawPower = parts[4].replace("MW", "").trim().replace(",", ".");
+        const power = parseFloat(rawPower);
+
+        for (const name of rawNames) {
+          const site = plantNameMap[name];
+          if (!site) continue;
+
+          const start = new Date(baseDate);
+          const end = new Date(baseDate);
+
+          const [startH, startM] = startTime.split(":").map(Number);
+          const [endH, endM] = endTime.split(":").map(Number);
+
+          start.setHours(startH, startM);
+          end.setHours(endH, endM);
+
+          csvRows.push(`${site};${format(start)};${format(end)};${power}`);
+        }
+      }
+
+      setOutput(csvRows.join("\n"));
       return;
     }
 
@@ -42,16 +88,14 @@ export default function CurtailmentPlanner() {
     const dataLines = lines.slice(2);
 
     const baseDate = new Date("2025-07-28T00:00:00");
-    const csvRows: string[] = [
-      "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
-    ];
 
     for (const line of dataLines) {
       const cols = line.split("\t");
       const rawSite = cols[0].trim().toUpperCase();
-      const site = plantNameMap[rawSite] || rawSite;
-      const values = cols.slice(1);
+      const site = plantNameMap[rawSite];
+      if (!site) continue;
 
+      const values = cols.slice(1);
       let hourIndex = 0;
 
       for (let i = 0; i < values.length; i++) {
@@ -70,9 +114,7 @@ export default function CurtailmentPlanner() {
         const raw = values[i].replace(",", ".");
         const power = parseFloat(raw);
 
-        csvRows.push(
-          `${site};${format(start)};${format(end)};${power}`
-        );
+        csvRows.push(`${site};${format(start)};${format(end)};${power}`);
 
         if (quarter === "Q4") hourIndex++;
       }
@@ -85,6 +127,7 @@ export default function CurtailmentPlanner() {
     `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(
       d.getHours()
     )}:${pad(d.getMinutes())}`;
+
   const pad = (n: number) => (n < 10 ? "0" + n : n);
 
   const downloadCSV = () => {
@@ -106,15 +149,20 @@ export default function CurtailmentPlanner() {
       <Textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder="Paste quarter-hour park table..."
+        placeholder="Paste curtailment table or email data..."
         className="min-h-[150px]"
       />
 
       <div className="flex gap-2">
         <Button onClick={convertToCSV}>Convert to CSV</Button>
         {output && <Button onClick={downloadCSV}>Download CSV</Button>}
-      </div>
 
+
+      </div>
+                <div>
+              <Button> {<Link href="/">Back</Link>}</Button>  
+        </div>
+    
       {output && (
         <div className="bg-gray-100 dark:bg-gray-800 p-4 mt-4 rounded">
           <pre className="whitespace-pre-wrap text-sm">{output}</pre>
