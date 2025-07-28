@@ -13,6 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+
+export const metadata = {
+  title: "CC SOLAR APP",
+  description: "",
+}
 const clusters = {
   NEOEN: {
     "NON-PV-RIO MAIOR BASE": 150,
