@@ -229,7 +229,7 @@ export default function SolarEnergyWebApp() {
         </Card>
         
       )}
-      <div>Toggle Dark/Light Mode<ThemeToggle /></div>
+      <div><ThemeToggle /></div>
       
       
 
