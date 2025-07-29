@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/ui/BackButton";
 
 const plantNameMap: Record<string, string> = {
   PEREA: "PV-PEREA",
@@ -52,7 +53,7 @@ export default function CurtailmentPlanner() {
     setSelectedDate("tomorrow");
   };
 
-
+  
   const convertToCSV = () => {
     const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
     if (lines.length < 2) {
@@ -209,6 +210,9 @@ export default function CurtailmentPlanner() {
           <pre className="whitespace-pre-wrap text-sm">{output}</pre>
         </div>
       )}
+
+    <BackButton /> 
+
     </div>
   );
 }
