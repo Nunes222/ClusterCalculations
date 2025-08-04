@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-
 const clusters = {
   NEOEN: {
     "NON-PV-RIO MAIOR BASE": 150,
@@ -36,7 +35,6 @@ const clusters = {
 };
 type ClusterName = keyof typeof clusters;
 type ParkName = keyof (typeof clusters)[ClusterName];
-
 
 type Allocation = {
   [key: string]: {
@@ -64,28 +62,35 @@ export default function SolarEnergyWebApp() {
   };
 
   const calculate = () => {
-    let clusterParks = { ...clusters[cluster] };
+    let clusterParks: Record<string, number> = { ...clusters[cluster] };
 
-    let availableEnergy = energyLimit - battery;
+    let availableEnergy = energyLimit;
     let fixedOutput = 0;
     let dynamicParks: Record<string, number> = {};
+    let visosoBatteryCompensation = 0;
 
-  if (cluster === "Alcoutim") {
-    const alcoutimParks = clusterParks as typeof clusters["Alcoutim"];
+    if (cluster === "Alcoutim") {
+      const alcoutimParks = clusterParks as typeof clusters["Alcoutim"];
 
-    if (isPereiro2Fixed) {
-      alcoutimParks.Pereiro += pereiro2Energy;
-      fixedOutput += pereiro2Energy;
-    } else {
-      alcoutimParks.Pereiro += clusters.Alcoutim.Pereiro2;
+      // Pereiro2 fixed adjustment
+      if (isPereiro2Fixed) {
+        alcoutimParks.Pereiro += pereiro2Energy;
+        fixedOutput += pereiro2Energy;
+      } else {
+        alcoutimParks.Pereiro += clusters.Alcoutim.Pereiro2;
+      }
+
+      // Battery charging: Viçoso compensates alone
+      if (battery < 0) {
+        visosoBatteryCompensation = -battery;
+      }
+
+      // Remove Pereiro2 from active parks
+      const { Pereiro2, ...rest } = alcoutimParks;
+      clusterParks = { ...rest };
     }
 
-    // Cast to any to suppress error on delete
-    delete (alcoutimParks as any).Pereiro2;
-  }
-
-
-
+    // Classify parks as fixed or dynamic
     for (const [park, power] of Object.entries(clusterParks)) {
       const comms = commsState[park] ?? true;
       if (!comms) {
@@ -95,13 +100,23 @@ export default function SolarEnergyWebApp() {
       }
     }
 
+    // Battery discharging: subtract from total available
+    if (cluster === "Alcoutim" && battery > 0) {
+      availableEnergy -= battery;
+    }
+
     availableEnergy = Math.max(0, availableEnergy - fixedOutput);
 
     const totalDynamicPower = Object.values(dynamicParks).reduce((a, b) => a + b, 0);
-    const dynamicAllocation: Record<string, number> = {};
 
+    const dynamicAllocation: Record<string, number> = {};
     for (const [park, power] of Object.entries(dynamicParks)) {
       dynamicAllocation[park] = Math.max(0, (power / totalDynamicPower) * availableEnergy);
+    }
+
+    // Apply Viçoso compensation for charging
+    if (visosoBatteryCompensation > 0 && dynamicAllocation["Viçoso"] !== undefined) {
+      dynamicAllocation["Viçoso"] += visosoBatteryCompensation;
     }
 
     const fullAllocation: Allocation = {};
@@ -164,6 +179,8 @@ export default function SolarEnergyWebApp() {
               type="number"
               value={battery}
               onChange={(e) => setBattery(Number(e.target.value))}
+              inputMode="decimal"
+              pattern="^-?\\d*\\.?\\d*$"
             />
           </div>
 
@@ -199,12 +216,12 @@ export default function SolarEnergyWebApp() {
 
       <Button onClick={calculate}>Allocate Energy</Button>
 
-          <div>
-              <Button> {<Link href="/curtailment">Curtailment Planner</Link>}</Button>  
-          </div>
+      <div>
+        <Button> <Link href="/curtailment">Curtailment Planner</Link></Button>  
+      </div>
+
       {allocation && (
         <Card>
-
           <CardContent className="p-4 space-y-2">
             <div className="font-semibold">Dynamic Parks</div>
             {Object.entries(allocation)
@@ -226,14 +243,10 @@ export default function SolarEnergyWebApp() {
                 </div>
               ))}
           </CardContent>
-          
         </Card>
-        
       )}
-      <div><ThemeToggle /></div>
-      
-      
 
+      <div><ThemeToggle /></div>
     </div>
   );
 }
