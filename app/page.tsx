@@ -2,6 +2,7 @@
 import ThemeToggle from "@/components/ui/ThemeToggle"; 
 import Link from "next/link";
 import { useState } from "react";
+import { useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +43,7 @@ type Allocation = {
     value: number;
   };
 };
+
 
 export default function SolarEnergyWebApp() {
   const [cluster, setCluster] = useState<ClusterName>("NEOEN");
@@ -168,6 +170,19 @@ export default function SolarEnergyWebApp() {
 
     setAllocation(fullAllocation);
   };
+  useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // Trigger with Enter or Ctrl+Enter
+    if (e.key === "Enter" && (!e.ctrlKey || e.ctrlKey)) {
+      e.preventDefault();
+      calculate();
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [calculate]);
+
 
   return (
     <div className="p-4 max-w-xl mx-auto space-y-4">
