@@ -61,6 +61,11 @@ export default function SolarEnergyWebApp() {
     }));
   };
 
+    const maxOutputs: Record<ClusterName, number> = {
+    NEOEN: 240,
+    Alcoutim: 140,
+    Pitarco: 47.8,
+  };
   const calculate = () => {
     let clusterParks: Record<string, number> = { ...clusters[cluster] };
 
@@ -109,10 +114,37 @@ export default function SolarEnergyWebApp() {
 
     const totalDynamicPower = Object.values(dynamicParks).reduce((a, b) => a + b, 0);
 
+
+        // Fool-proofing: if energyLimit exceeds cluster max, return nominal
+    const maxClusterOutput = maxOutputs[cluster];
+    const effectiveMax =
+      cluster === "Alcoutim" && isPereiro2Fixed
+        ? maxClusterOutput - clusters.Alcoutim.Pereiro2 + pereiro2Energy
+        : maxClusterOutput;
+
+    if (energyLimit > effectiveMax) {
+    window.alert("Setpoint above max cluster power value");
+
+    const fallback: Allocation = {};
+    for (const [park, power] of Object.entries(clusterParks)) {
+      fallback[park] = {
+        type: "fixed",
+        value: power,
+      };
+    }
+
+    setAllocation(fallback);
+    return;
+  }
+
     const dynamicAllocation: Record<string, number> = {};
     for (const [park, power] of Object.entries(dynamicParks)) {
-      dynamicAllocation[park] = Math.max(0, (power / totalDynamicPower) * availableEnergy);
+      dynamicAllocation[park] = Math.min(
+        power,
+        (power / totalDynamicPower) * availableEnergy
+      );
     }
+    
 
     // Apply Viçoso compensation for charging
     if (visosoBatteryCompensation > 0 && dynamicAllocation["Viçoso"] !== undefined) {
