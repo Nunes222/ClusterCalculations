@@ -44,6 +44,12 @@ type Allocation = {
   };
 };
 
+const getMaxClusterOutput = (clusterName: ClusterName): number => {
+  const parks = clusters[clusterName];
+  return Object.values(parks).reduce((sum, val) => sum + val, 0);
+};
+
+
 
 export default function SolarEnergyWebApp() {
   const [cluster, setCluster] = useState<ClusterName>("NEOEN");
@@ -53,6 +59,8 @@ export default function SolarEnergyWebApp() {
   const [pereiro2Energy, setPereiro2Energy] = useState<number>(10);
   const [allocation, setAllocation] = useState<Allocation | null>(null);
   const [commsState, setCommsState] = useState<Record<string, boolean>>({});
+  const [availabilityState, setAvailabilityState] = useState<Record<string, number>>({});
+
 
   const parks = clusters[cluster];
 
@@ -63,13 +71,24 @@ export default function SolarEnergyWebApp() {
     }));
   };
 
-    const maxOutputs: Record<ClusterName, number> = {
-    NEOEN: 240,
-    Alcoutim: 140,
-    Pitarco: 47.8,
-  };
   const calculate = () => {
     let clusterParks: Record<string, number> = { ...clusters[cluster] };
+    // Apply availability factor
+    for (const [park, nominal] of Object.entries(clusterParks)) {
+      const availability = availabilityState[park] ?? 100; // default 100%
+      clusterParks[park] = (nominal * availability) / 100;
+    }
+
+    // Max considering availability
+    const maxClusterOutput = Object.entries(clusters[cluster]).reduce(
+      (sum, [park, nominal]) => {
+        const availability = availabilityState[park] ?? 100;
+        return sum + (nominal * availability) / 100;
+      },
+      0
+    );
+
+
 
     let availableEnergy = energyLimit;
     let fixedOutput = 0;
@@ -116,17 +135,14 @@ export default function SolarEnergyWebApp() {
 
     const totalDynamicPower = Object.values(dynamicParks).reduce((a, b) => a + b, 0);
 
+  // Fool-proofing: if energyLimit exceeds cluster max, return nominal
+  const effectiveMax =
+    cluster === "Alcoutim" && isPereiro2Fixed
+      ? maxClusterOutput - clusters.Alcoutim.Pereiro2 + pereiro2Energy
+      : maxClusterOutput;
 
-        // Fool-proofing: if energyLimit exceeds cluster max, return nominal
-    const maxClusterOutput = maxOutputs[cluster];
-    const effectiveMax =
-      cluster === "Alcoutim" && isPereiro2Fixed
-        ? maxClusterOutput - clusters.Alcoutim.Pereiro2 + pereiro2Energy
-        : maxClusterOutput;
-
-    if (energyLimit > effectiveMax) {
-    window.alert("Setpoint above max cluster power value");
-
+  if (energyLimit > effectiveMax) {
+    window.alert("⚠️ Setpoint above max cluster power value. Showing nominal values.");
     const fallback: Allocation = {};
     for (const [park, power] of Object.entries(clusterParks)) {
       fallback[park] = {
@@ -134,7 +150,6 @@ export default function SolarEnergyWebApp() {
         value: power,
       };
     }
-
     setAllocation(fallback);
     return;
   }
@@ -244,22 +259,55 @@ export default function SolarEnergyWebApp() {
         </>
       )}
 
+
       <div className="space-y-2">
-        <label className="block text-sm font-medium">Park Communication State - uncheck if park can't be controlled</label>
-        {Object.keys(parks).map((park) => {
-          if (cluster === "Alcoutim" && park === "Pereiro2") return null;
-          return (
-            <div key={park} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={commsState[park] ?? true}
-                onChange={() => handleCommsToggle(park)}
-              />
-              <span>{park}</span>
-            </div>
-          );
-        })}
-      </div>
+  <label className="block text-sm font-medium">
+    Park Conditions - Uncheck if fixed ------
+    If everything is available leave default values
+  </label>
+
+  <div className="grid grid-cols-2 gap-4">
+    {Object.keys(parks).map((park) => {
+      if (cluster === "Alcoutim" && park === "Pereiro2") return null;
+      return (
+        <div
+          key={park}
+          className="flex items-center justify-between p-2 rounded-lg border"
+        >
+          {/* Left side: park name + comms toggle */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={commsState[park] ?? true}
+              onChange={() => handleCommsToggle(park)}
+            />
+            <span>{park}</span>
+          </div>
+
+          {/* Right side: availability input */}
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={availabilityState[park] ?? 100}
+              onChange={(e) =>
+                setAvailabilityState((prev) => ({
+                  ...prev,
+                  [park]: Number(e.target.value),
+                }))
+              }
+              className="w-16"
+            />
+            <span className="text-sm">%</span>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+</div>
+
 
       <Button onClick={calculate}>Allocate Energy</Button>
 
