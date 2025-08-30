@@ -1,8 +1,7 @@
 "use client";
 import ThemeToggle from "@/components/ui/ThemeToggle"; 
 import Link from "next/link";
-import { useState } from "react";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +33,7 @@ const clusters = {
     "Pitarco 3": 9,
   },
 };
+
 type ClusterName = keyof typeof clusters;
 type ParkName = keyof (typeof clusters)[ClusterName];
 
@@ -43,13 +43,6 @@ type Allocation = {
     value: number;
   };
 };
-
-const getMaxClusterOutput = (clusterName: ClusterName): number => {
-  const parks = clusters[clusterName];
-  return Object.values(parks).reduce((sum, val) => sum + val, 0);
-};
-
-
 
 export default function SolarEnergyWebApp() {
   const [cluster, setCluster] = useState<ClusterName>("NEOEN");
@@ -61,7 +54,6 @@ export default function SolarEnergyWebApp() {
   const [commsState, setCommsState] = useState<Record<string, boolean>>({});
   const [availabilityState, setAvailabilityState] = useState<Record<string, number>>({});
 
-
   const parks = clusters[cluster];
 
   const handleCommsToggle = (park: string) => {
@@ -71,59 +63,80 @@ export default function SolarEnergyWebApp() {
     }));
   };
 
+  // New: compute max output respecting corrected order (merge Pereiro2 → apply availability)
+  const getMaxClusterOutput = (
+    clusterName: ClusterName,
+    availability: Record<string, number>,
+    isP2Fixed: boolean,
+    p2Energy: number
+  ): number => {
+    const base: Record<string, number> = { ...clusters[clusterName] };
+
+    if (clusterName === "Alcoutim") {
+      const effectiveP2 = isP2Fixed ? p2Energy : clusters.Alcoutim.Pereiro2;
+      base["Pereiro"] = (base["Pereiro"] ?? 0) + effectiveP2;
+      delete base["Pereiro2"]; // remove after merge
+    }
+
+    let sum = 0;
+    for (const [park, nominal] of Object.entries(base)) {
+      const a = availability[park] ?? 100;
+      sum += (nominal * a) / 100;
+    }
+    return sum;
+  };
+
   const calculate = () => {
+    // 1) Start from nominal
     let clusterParks: Record<string, number> = { ...clusters[cluster] };
-    // Apply availability factor
+
+    // 2) If Alcoutim, merge Pereiro2 into Pereiro first (before availability)
+    if (cluster === "Alcoutim") {
+      const effectiveP2 = isPereiro2Fixed ? pereiro2Energy : clusters.Alcoutim.Pereiro2;
+      clusterParks["Pereiro"] = (clusterParks["Pereiro"] ?? 0) + effectiveP2;
+      delete clusterParks["Pereiro2"];
+    }
+
+    // 3) Apply availability to all active parks (after any merges)
     for (const [park, nominal] of Object.entries(clusterParks)) {
       const availability = availabilityState[park] ?? 100; // default 100%
       clusterParks[park] = (nominal * availability) / 100;
     }
 
-    // Max considering availability
-    const maxClusterOutput = Object.entries(clusters[cluster]).reduce(
-      (sum, [park, nominal]) => {
-        const availability = availabilityState[park] ?? 100;
-        return sum + (nominal * availability) / 100;
-      },
-      0
+    // 4) Compute max output with the same order for the guard check
+    const maxClusterOutput = getMaxClusterOutput(
+      cluster,
+      availabilityState,
+      isPereiro2Fixed,
+      pereiro2Energy
     );
 
-
-
+    // 5) Now proceed with allocation variables
     let availableEnergy = energyLimit;
     let fixedOutput = 0;
     let dynamicParks: Record<string, number> = {};
     let visosoBatteryCompensation = 0;
 
-    if (cluster === "Alcoutim") {
-      const alcoutimParks = clusterParks as typeof clusters["Alcoutim"];
-
-      // Pereiro2 fixed adjustment
-      if (isPereiro2Fixed) {
-        alcoutimParks.Pereiro += pereiro2Energy;
-        fixedOutput += pereiro2Energy;
-      } else {
-        alcoutimParks.Pereiro += clusters.Alcoutim.Pereiro2;
-      }
-
-      // Battery charging: Viçoso compensates alone
-      if (battery < 0) {
-        visosoBatteryCompensation = -battery;
-      }
-
-      // Remove Pereiro2 from active parks
-      const { Pereiro2, ...rest } = alcoutimParks;
-      clusterParks = { ...rest };
+    // Battery charging: Viçoso compensates alone (we'll add later)
+    if (cluster === "Alcoutim" && battery < 0) {
+      visosoBatteryCompensation = -battery;
     }
 
     // Classify parks as fixed or dynamic
     for (const [park, power] of Object.entries(clusterParks)) {
       const comms = commsState[park] ?? true;
       if (!comms) {
-        fixedOutput += power;
+        fixedOutput += power; // offline control → fixed
       } else {
         dynamicParks[park] = power;
       }
+    }
+
+    // If Pereiro2 is fixed, treat that portion as fixed energy (scaled by Pereiro availability)
+    if (cluster === "Alcoutim" && isPereiro2Fixed) {
+      const pereiroAvail = availabilityState["Pereiro"] ?? 100;
+      const p2FixedPortion = (pereiro2Energy * pereiroAvail) / 100;
+      fixedOutput += p2FixedPortion;
     }
 
     // Battery discharging: subtract from total available
@@ -131,41 +144,41 @@ export default function SolarEnergyWebApp() {
       availableEnergy -= battery;
     }
 
+    // Guard: setpoint above max available → show nominal (after availability)
+    const effectiveMax = maxClusterOutput;
+    if (energyLimit > effectiveMax) {
+      window.alert("⚠️ Setpoint above max cluster power value. Showing nominal values.");
+      const fallback: Allocation = {};
+      for (const [park, power] of Object.entries(clusterParks)) {
+        fallback[park] = {
+          type: "fixed",
+          value: power,
+        };
+      }
+      setAllocation(fallback);
+      return;
+    }
+
+    // Remaining energy after fixed portions
     availableEnergy = Math.max(0, availableEnergy - fixedOutput);
 
     const totalDynamicPower = Object.values(dynamicParks).reduce((a, b) => a + b, 0);
 
-  // Fool-proofing: if energyLimit exceeds cluster max, return nominal
-  const effectiveMax =
-    cluster === "Alcoutim" && isPereiro2Fixed
-      ? maxClusterOutput - clusters.Alcoutim.Pereiro2 + pereiro2Energy
-      : maxClusterOutput;
-
-  if (energyLimit > effectiveMax) {
-    window.alert("⚠️ Setpoint above max cluster power value. Showing nominal values.");
-    const fallback: Allocation = {};
-    for (const [park, power] of Object.entries(clusterParks)) {
-      fallback[park] = {
-        type: "fixed",
-        value: power,
-      };
-    }
-    setAllocation(fallback);
-    return;
-  }
-
     const dynamicAllocation: Record<string, number> = {};
     for (const [park, power] of Object.entries(dynamicParks)) {
+      // proportionally allocate but never exceed the park's (availability-adjusted) max
       dynamicAllocation[park] = Math.min(
         power,
-        (power / totalDynamicPower) * availableEnergy
+        totalDynamicPower > 0 ? (power / totalDynamicPower) * availableEnergy : 0
       );
     }
-    
 
-    // Apply Viçoso compensation for charging
+    // Apply Viçoso compensation for charging (and clamp to its max)
     if (visosoBatteryCompensation > 0 && dynamicAllocation["Viçoso"] !== undefined) {
-      dynamicAllocation["Viçoso"] += visosoBatteryCompensation;
+      dynamicAllocation["Viçoso"] = Math.min(
+        clusterParks["Viçoso"] ?? 0,
+        (dynamicAllocation["Viçoso"] ?? 0) + visosoBatteryCompensation
+      );
     }
 
     const fullAllocation: Allocation = {};
@@ -185,69 +198,77 @@ export default function SolarEnergyWebApp() {
 
     setAllocation(fullAllocation);
   };
+
   useEffect(() => {
-  const handleKeyDown = (e: KeyboardEvent) => {
-    // Trigger with Enter or Ctrl+Enter
-    if (e.key === "Enter" && (!e.ctrlKey || e.ctrlKey)) {
-      e.preventDefault();
-      calculate();
-    }
-  };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        calculate();
+      }
+    };
 
-  window.addEventListener("keydown", handleKeyDown);
-  return () => window.removeEventListener("keydown", handleKeyDown);
-}, [calculate]);
-
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [calculate]);
 
   return (
-    <div className="p-4 max-w-xl mx-auto space-y-4">
-      <h1 className="text-xl font-bold">Cluster Energy Allocator</h1>
-
-      <div className="space-y-2">
-        <label className="block text-sm font-medium">Select a cluster</label>
-        <Select value={cluster} onValueChange={(value) => {
-          setCluster(value as keyof typeof clusters);
-          setCommsState({});
-        }}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a cluster" />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.keys(clusters).map((name) => (
-              <SelectItem key={name} value={name}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="p-4 max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Cluster Energy Allocator</h1>
+        <ThemeToggle />
       </div>
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium">Power Setpoint to apply (MW)</label>
-        <Input
-          type="number"
-          value={energyLimit}
-          onChange={(e) => setEnergyLimit(Number(e.target.value))}
-        />
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium">Select a cluster</label>
+          <Select
+            value={cluster}
+            onValueChange={(value) => {
+              setCluster(value as keyof typeof clusters);
+              setCommsState({});
+              setAvailabilityState({});
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a cluster" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.keys(clusters).map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-      {cluster === "Alcoutim" && (
-        <>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium">Power Setpoint to apply (MW)</label>
+          <Input
+            type="number"
+            value={energyLimit}
+            onChange={(e) => setEnergyLimit(Number(e.target.value))}
+          />
+        </div>
+
+        {cluster === "Alcoutim" && (
           <div className="space-y-2">
-            <label className="block text-sm font-medium">
-              Battery contribution (MW)
-            </label>
+            <label className="block text-sm font-medium">Battery contribution (MW)</label>
             <Input
               type="number"
               value={battery}
               onChange={(e) => setBattery(Number(e.target.value))}
               inputMode="decimal"
-              pattern="^-?\\d*\\.?\\d*$"
+              pattern="^-?\d*\.?\d*$"
             />
           </div>
+        )}
+      </div>
 
+      {cluster === "Alcoutim" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="flex items-center space-x-2">
+            <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={isPereiro2Fixed}
@@ -256,63 +277,70 @@ export default function SolarEnergyWebApp() {
               <span>Pereiro2 is fixed</span>
             </label>
           </div>
-        </>
-      )}
 
-
-      <div className="space-y-2">
-  <label className="block text-sm font-medium">
-    Park Conditions - Uncheck if fixed ------
-    If everything is available leave default values
-  </label>
-
-  <div className="grid grid-cols-2 gap-4">
-    {Object.keys(parks).map((park) => {
-      if (cluster === "Alcoutim" && park === "Pereiro2") return null;
-      return (
-        <div
-          key={park}
-          className="flex items-center justify-between p-2 rounded-lg border"
-        >
-          {/* Left side: park name + comms toggle */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={commsState[park] ?? true}
-              onChange={() => handleCommsToggle(park)}
-            />
-            <span>{park}</span>
-          </div>
-
-          {/* Right side: availability input */}
-          <div className="flex items-center gap-1">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Pereiro2 fixed output (MW)</label>
             <Input
               type="number"
-              min={0}
-              max={100}
-              step={1}
-              value={availabilityState[park] ?? 100}
-              onChange={(e) =>
-                setAvailabilityState((prev) => ({
-                  ...prev,
-                  [park]: Number(e.target.value),
-                }))
-              }
-              className="w-16"
+              value={pereiro2Energy}
+              onChange={(e) => setPereiro2Energy(Number(e.target.value))}
             />
-            <span className="text-sm">%</span>
           </div>
         </div>
-      );
-    })}
-  </div>
-</div>
+      )}
 
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">
+          Park Conditions — Uncheck if fixed • Set availability (%) per park
+        </label>
 
-      <Button onClick={calculate}>Allocate Energy</Button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.keys(parks).map((park) => {
+            if (cluster === "Alcoutim" && park === "Pereiro2") return null;
+            return (
+              <div
+                key={park}
+                className="flex items-center justify-between p-3 rounded-lg border"
+              >
+                {/* Left: park name + comms toggle */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={commsState[park] ?? true}
+                    onChange={() => handleCommsToggle(park)}
+                  />
+                  <span>{park}</span>
+                </div>
 
-      <div>
-        <Button> <Link href="/curtailment">Curtailment Planner</Link></Button>  
+                {/* Right: availability input */}
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={availabilityState[park] ?? 100}
+                    onChange={(e) =>
+                      setAvailabilityState((prev) => ({
+                        ...prev,
+                        [park]: Number(e.target.value),
+                      }))
+                    }
+                    className="w-20"
+                  />
+                  <span className="text-sm">%</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={calculate}>Allocate Energy</Button>
+        <Button asChild variant="secondary">
+          <Link href="/curtailment">Curtailment Planner</Link>
+        </Button>
       </div>
 
       {allocation && (
@@ -340,8 +368,6 @@ export default function SolarEnergyWebApp() {
           </CardContent>
         </Card>
       )}
-
-      <div><ThemeToggle /></div>
     </div>
   );
 }
