@@ -26,6 +26,7 @@ const clusters = {
     Viçoso: 43.7,
     Pereiro: 15.9,
     Pereiro2: 10,
+    Trindade: 13.2, 
   },
   Pitarco: {
     "Pitarco 1": 30.3,
@@ -48,7 +49,7 @@ export default function SolarEnergyWebApp() {
   const [cluster, setCluster] = useState<ClusterName>("NEOEN");
   const [energyLimit, setEnergyLimit] = useState<number>(100);
   const [battery, setBattery] = useState<number>(0);
-  const [isPereiro2Fixed, setIsPereiro2Fixed] = useState<boolean>(true);
+  const [isPereiro2Fixed, setIsPereiro2Fixed] = useState<boolean>(false);
   const [pereiro2Energy, setPereiro2Energy] = useState<number>(10);
   const [allocation, setAllocation] = useState<Allocation | null>(null);
   const [commsState, setCommsState] = useState<Record<string, boolean>>({});
@@ -274,12 +275,12 @@ export default function SolarEnergyWebApp() {
                 checked={isPereiro2Fixed}
                 onChange={(e) => setIsPereiro2Fixed(e.target.checked)}
               />
-              <span>Pereiro2 is fixed</span>
+              <span>Pereiro2 not limiting</span>
             </label>
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium">Pereiro2 fixed output (MW)</label>
+            <label className="block text-sm font-medium">Pereiro2 fixed Power (MW)</label>
             <Input
               type="number"
               value={pereiro2Energy}
@@ -291,7 +292,7 @@ export default function SolarEnergyWebApp() {
 
       <div className="space-y-2">
         <label className="block text-sm font-medium">
-          Park Conditions — Uncheck if fixed • Set availability (%) per park
+          Park Conditions — Uncheck if not limiting • Set availability (%) per park
         </label>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
