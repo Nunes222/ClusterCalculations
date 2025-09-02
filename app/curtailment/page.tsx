@@ -12,7 +12,7 @@ const plantNameMap: Record<string, string> = {
   ENVITERO: "PV-ENVITERO",
   LOGRO: "PV-LOGRO",
   "TORRE BELA": "NON-PV-TORRE BELA BASE",
-  "SOBREEQUIP TORRE BELA": "NON-PV-TORRE BELA REEQUIPAMIENTO",
+  "SOBREEQUI TORRE BELA": "NON-PV-TORRE BELA REEQUIPAMIENTO",
   "RIO MAIOR": "NON-PV-RIO MAIOR BASE",
   "SOBREEQUIP RIO MAIOR": "NON-PV-RIO MAIOR REEQUIPAMIENTO",
   AURIGA: "PV-AURIGA SOLAR",
@@ -55,94 +55,134 @@ export default function CurtailmentPlanner() {
 
   
   const convertToCSV = () => {
-    const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
-    if (lines.length < 2) {
-      setOutput("Invalid input format.");
-      return;
-    }
+  const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
+  if (lines.length < 2) {
+    setOutput("Invalid input format.");
+    return;
+  }
 
-    let csvRows: string[] = [
-      "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
-    ];
+  let csvRows: string[] = [
+    "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
+  ];
 
-    const isEmailFormat =
-      lines[0].toLowerCase().includes("activo") &&
-      lines[0].toLowerCase().includes("setpoint");
+  const header = lines[0].toLowerCase();
 
-    if (isEmailFormat) {
-      for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split("\t");
-        if (parts.length < 5) continue;
+  const isEmailFormat =
+    header.includes("activo") && header.includes("setpoint");
+  const isSpanishFormat =
+    header.includes("instalación") && header.includes("inicio");
 
-        const rawNames = parts[0]
-          .replace(/ e /gi, ",")
-          .split(",")
-          .map((s) => s.trim().toUpperCase());
+  if (isEmailFormat) {
+    // ---- Existing email format ----
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split("\t");
+      if (parts.length < 5) continue;
 
-        const startTime = parts[2].trim();
-        const endTime = parts[3].trim();
-        const rawPower = parts[4].replace("MW", "").trim().replace(",", ".");
-        const power = parseFloat(rawPower);
+      const rawNames = parts[0]
+        .replace(/ e /gi, ",")
+        .split(",")
+        .map((s) => s.trim().toUpperCase());
 
-        for (const name of rawNames) {
-          const site = plantNameMap[name];
-          if (!site) continue;
+      const startTime = parts[2].trim();
+      const endTime = parts[3].trim();
+      const rawPower = parts[4].replace("MW", "").trim().replace(",", ".");
+      const power = parseFloat(rawPower);
 
-          const start = new Date(baseDate);
-          const end = new Date(baseDate);
+      for (const name of rawNames) {
+        const site = plantNameMap[name];
+        if (!site) continue;
 
-          const [startH, startM] = startTime.split(":").map(Number);
-          const [endH, endM] = endTime.split(":").map(Number);
-
-          start.setHours(startH, startM);
-          end.setHours(endH, endM);
-
-          csvRows.push(`${site};${format(start)};${format(end)};${power}`);
-        }
-      }
-
-      setOutput(csvRows.join("\n"));
-      return;
-    }
-
-    // Quarter-based table
-    const hourLabels = lines[0].split("\t").slice(1);
-    const quarterLabels = lines[1].split("\t").slice(1);
-    const dataLines = lines.slice(2);
-
-    for (const line of dataLines) {
-      const cols = line.split("\t");
-      const rawSite = cols[0].trim().toUpperCase();
-      const site = plantNameMap[rawSite];
-      if (!site) continue;
-
-      const values = cols.slice(1);
-      let hourIndex = 0;
-
-      for (let i = 0; i < values.length; i++) {
-        const hourRange = hourLabels[hourIndex];
-        const hour = parseInt(hourRange.split("-")[0]);
-
-        const quarter = quarterLabels[i];
-        const quarterNum = parseInt(quarter.replace("Q", ""));
         const start = new Date(baseDate);
-        start.setHours(hour);
-        start.setMinutes((quarterNum - 1) * 15);
+        const end = new Date(baseDate);
 
-        const end = new Date(start);
-        end.setMinutes(start.getMinutes() + 15);
+        const [startH, startM] = startTime.split(":").map(Number);
+        const [endH, endM] = endTime.split(":").map(Number);
 
-        const raw = values[i].replace(",", ".");
-        const power = parseFloat(raw);
+        start.setHours(startH, startM);
+        end.setHours(endH, endM);
 
         csvRows.push(`${site};${format(start)};${format(end)};${power}`);
-
-        if (quarter === "Q4") hourIndex++;
       }
     }
-
     setOutput(csvRows.join("\n"));
-  };
+    return;
+  }
+
+  if (isSpanishFormat) {
+    // ---- New Spanish table format ----
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split("\t");
+      if (parts.length < 6) continue;
+
+      const rawNames = parts[0]
+        .replace(/ e /gi, ",")
+        .split(",")
+        .map((s) => s.trim().toUpperCase());
+
+      const startTime = parts[2].trim();
+      const endTime = parts[3].trim();
+      const rawPower = parts[5].replace("MW", "").trim().replace(",", ".");
+      const power = parseFloat(rawPower);
+
+      for (const name of rawNames) {
+        const site = plantNameMap[name];
+        if (!site) continue;
+
+        const start = new Date(baseDate);
+        const end = new Date(baseDate);
+
+        const [startH, startM] = startTime.split(":").map(Number);
+        const [endH, endM] = endTime.split(":").map(Number);
+
+        start.setHours(startH, startM);
+        end.setHours(endH, endM);
+
+        csvRows.push(`${site};${format(start)};${format(end)};${power}`);
+      }
+    }
+    setOutput(csvRows.join("\n"));
+    return;
+  }
+
+  // ---- Default: Quarter-based table ----
+  const hourLabels = lines[0].split("\t").slice(1);
+  const quarterLabels = lines[1].split("\t").slice(1);
+  const dataLines = lines.slice(2);
+
+  for (const line of dataLines) {
+    const cols = line.split("\t");
+    const rawSite = cols[0].trim().toUpperCase();
+    const site = plantNameMap[rawSite];
+    if (!site) continue;
+
+    const values = cols.slice(1);
+    let hourIndex = 0;
+
+    for (let i = 0; i < values.length; i++) {
+      const hourRange = hourLabels[hourIndex];
+      const hour = parseInt(hourRange.split("-")[0]);
+
+      const quarter = quarterLabels[i];
+      const quarterNum = parseInt(quarter.replace("Q", ""));
+      const start = new Date(baseDate);
+      start.setHours(hour);
+      start.setMinutes((quarterNum - 1) * 15);
+
+      const end = new Date(start);
+      end.setMinutes(start.getMinutes() + 15);
+
+      const raw = values[i].replace(",", ".");
+      const power = parseFloat(raw);
+
+      csvRows.push(`${site};${format(start)};${format(end)};${power}`);
+
+      if (quarter === "Q4") hourIndex++;
+    }
+  }
+
+  setOutput(csvRows.join("\n"));
+};
+
 
   const format = (d: Date) =>
     `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(
