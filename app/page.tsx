@@ -53,7 +53,13 @@ export default function SolarEnergyWebApp() {
   const [pereiro2Energy, setPereiro2Energy] = useState<number>(10);
   const [allocation, setAllocation] = useState<Allocation | null>(null);
   const [commsState, setCommsState] = useState<Record<string, boolean>>({});
-  const [availabilityState, setAvailabilityState] = useState<Record<string, number>>({});
+  // per-cluster availability state (preserved when switching clusters)
+  const [availabilityState, setAvailabilityState] = useState<Record<ClusterName, Record<string, number>>>({
+    NEOEN: {},
+    Alcoutim: {},
+    Pitarco: {},
+  });
+
 
   const parks = clusters[cluster];
 
@@ -64,10 +70,10 @@ export default function SolarEnergyWebApp() {
     }));
   };
 
-  // New: compute max output respecting corrected order (merge Pereiro2 → apply availability)
+  // compute max output respecting corrected order (merge Pereiro2 → apply availability)
   const getMaxClusterOutput = (
     clusterName: ClusterName,
-    availability: Record<string, number>,
+    availabilityByCluster: Record<ClusterName, Record<string, number>>,
     isP2Fixed: boolean,
     p2Energy: number
   ): number => {
@@ -81,7 +87,7 @@ export default function SolarEnergyWebApp() {
 
     let sum = 0;
     for (const [park, nominal] of Object.entries(base)) {
-      const a = availability[park] ?? 100;
+      const a = availabilityByCluster[clusterName]?.[park] ?? 100;
       sum += (nominal * a) / 100;
     }
     return sum;
@@ -100,7 +106,7 @@ export default function SolarEnergyWebApp() {
 
     // 3) Apply availability to all active parks (after any merges)
     for (const [park, nominal] of Object.entries(clusterParks)) {
-      const availability = availabilityState[park] ?? 100; // default 100%
+      const availability = availabilityState[cluster]?.[park] ?? 100;
       clusterParks[park] = (nominal * availability) / 100;
     }
 
@@ -135,7 +141,7 @@ export default function SolarEnergyWebApp() {
 
     // If Pereiro2 is fixed, treat that portion as fixed energy (scaled by Pereiro availability)
     if (cluster === "Alcoutim" && isPereiro2Fixed) {
-      const pereiroAvail = availabilityState["Pereiro"] ?? 100;
+      const pereiroAvail = availabilityState[cluster]?.["Pereiro"] ?? 100;
       const p2FixedPortion = (pereiro2Energy * pereiroAvail) / 100;
       fixedOutput += p2FixedPortion;
     }
@@ -227,7 +233,7 @@ export default function SolarEnergyWebApp() {
             onValueChange={(value) => {
               setCluster(value as keyof typeof clusters);
               setCommsState({});
-              setAvailabilityState({});
+              // IMPORTANT: do NOT reset availabilityState here — we want to preserve per-cluster values
             }}
           >
             <SelectTrigger>
@@ -260,7 +266,7 @@ export default function SolarEnergyWebApp() {
               value={battery}
               onChange={(e) => setBattery(Number(e.target.value))}
               inputMode="decimal"
-              pattern="^-?\d*\.?\d*$"
+              pattern="^-?\\d*\\.?\\d*$"
             />
           </div>
         )}
@@ -320,11 +326,14 @@ export default function SolarEnergyWebApp() {
                     min={0}
                     max={100}
                     step={1}
-                    value={availabilityState[park] ?? 100}
+                    value={availabilityState[cluster]?.[park] ?? 100}
                     onChange={(e) =>
                       setAvailabilityState((prev) => ({
                         ...prev,
-                        [park]: Number(e.target.value),
+                        [cluster]: {
+                          ...prev[cluster],
+                          [park]: Number(e.target.value),
+                        },
                       }))
                     }
                     className="w-20"
