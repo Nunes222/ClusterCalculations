@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/BackButton";
 
+// Mapping from short plant names to full site names
 const plantNameMap: Record<string, string> = {
   PEREA: "PV-PEREA",
   VEGON: "PV-VEGON",
@@ -25,7 +26,32 @@ const plantNameMap: Record<string, string> = {
   "TELESTO 7": "PV-TELESTO SOLAR 7",
   RHEA: "PV-RHEA SOLAR",
   HINOJOSAS: "PV-HINOJOSAS I",
+  ALBERCAS: "PV-ALBERCAS",
+  "SÃO MARCOS": "PV-SÃOMARCOS",  // normal input from Excel/email
+  "SAO MARCOS": "PV-SÃOMARCOS",  // safety for unaccented versions
+  VIÇOSO: "PV-VIÇOSO",
+  PEREIRO: "PV-PEREIRO",
+  PEREIRO2: "PV-PEREIRO2",
+  TRINDADE: "GBT-PV-TRINDADE",
 };
+
+// ✅ Cluster definitions — short names only
+const clusters: Record<string, Record<string, number>> = {
+  Alcoutim: {
+    ALBERCAS: 25.5,
+    "SAO MARCOS": 44.9,
+    VIÇOSO: 43.7,
+    PEREIRO: 25.9,
+    TRINDADE: 13.2,
+  },
+  NEOEN: {
+    "RIO MAIOR": 150,
+    "SOBREEQUIP RIO MAIOR": 30,
+    "TORRE BELA": 50,
+    "SOBREEQUI TORRE BELA": 10,
+  },
+};
+
 
 export default function CurtailmentPlanner() {
   const [input, setInput] = useState("");
@@ -35,7 +61,6 @@ export default function CurtailmentPlanner() {
     today.setHours(0, 0, 0, 0);
     return today;
   });
-
   const [selectedDate, setSelectedDate] = useState<"today" | "tomorrow">("today");
 
   const useToday = () => {
@@ -53,136 +78,88 @@ export default function CurtailmentPlanner() {
     setSelectedDate("tomorrow");
   };
 
-  
   const convertToCSV = () => {
-  const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
-  if (lines.length < 2) {
-    setOutput("Invalid input format.");
-    return;
-  }
+    const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
+    if (lines.length < 2) {
+      setOutput("Invalid input format.");
+      return;
+    }
 
-  let csvRows: string[] = [
-    "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
-  ];
+    const header = lines[0].toLowerCase();
+    let csvRows: string[] = [
+      "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
+    ];
 
-  const header = lines[0].toLowerCase();
+    // --- Format A: Standard Email/Market Data Format ---
+    const isEmailFormat = header.includes("activo") && header.includes("setpoint");
 
-  const isEmailFormat =
-    header.includes("activo") && header.includes("setpoint");
-  const isSpanishFormat =
-    header.includes("instalación") && header.includes("inicio");
+    // --- Format B: Spanish Tabular Format (Instalación / Periodo / Inicio / Fin / SetPoint) ---
+    const isSpanishFormat = header.includes("instalación") && header.includes("inicio") && header.includes("setpoint");
 
-  if (isEmailFormat) {
-    // ---- Existing email format ----
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split("\t");
-      if (parts.length < 5) continue;
+    if (isEmailFormat || isSpanishFormat) {
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split("\t");
+        if (parts.length < 5) continue;
 
-      const rawNames = parts[0]
-        .replace(/ e /gi, ",")
-        .split(",")
-        .map((s) => s.trim().toUpperCase());
+        const rawNames = parts[0]
+          .replace(/ e /gi, ",")
+          .split(",")
+          .map((s) => s.trim().toUpperCase());
 
-      const startTime = parts[2].trim();
-      const endTime = parts[3].trim();
-      const rawPower = parts[4].replace("MW", "").trim().replace(",", ".");
-      const power = parseFloat(rawPower);
+        const startTime = parts[isSpanishFormat ? 2 : 2].trim();
+        const endTime = parts[isSpanishFormat ? 3 : 3].trim();
+        const rawPower = parts[isSpanishFormat ? 5 : 4]
+          ?.replace("MW", "")
+          .trim()
+          .replace(",", ".");
+        const clusterSetpoint = parseFloat(rawPower);
+        if (isNaN(clusterSetpoint)) continue;
 
-      for (const name of rawNames) {
-        const site = plantNameMap[name];
-        if (!site) continue;
+        // Determine cluster
+        let clusterName = "";
+        if (rawNames.some((n) => n.includes("RIO MAIOR") || n.includes("TORRE BELA")))
+          clusterName = "NEOEN";
+        else if (
+          rawNames.some((n) =>
+            n.includes("ALBERCAS") ||
+            n.includes("SÃO MARCOS") ||
+            n.includes("VIÇOSO") ||
+            n.includes("PEREIRO") ||
+            n.includes("TRINDADE")
+          )
+        )
+          clusterName = "Alcoutim";
 
-        const start = new Date(baseDate);
-        const end = new Date(baseDate);
+        if (!clusterName) continue;
+
+        const clusterParks = clusters[clusterName];
+        const selectedParks = Object.entries(clusterParks).filter(([name]) =>
+          rawNames.some((n) => name.toUpperCase().includes(n))
+        );
+        const totalNominal = selectedParks.reduce((sum, [, p]) => sum + p, 0);
+        if (totalNominal === 0) continue;
 
         const [startH, startM] = startTime.split(":").map(Number);
         const [endH, endM] = endTime.split(":").map(Number);
 
-        start.setHours(startH, startM);
-        end.setHours(endH, endM);
-
-        csvRows.push(`${site};${format(start)};${format(end)};${power}`);
-      }
-    }
-    setOutput(csvRows.join("\n"));
-    return;
-  }
-
-  if (isSpanishFormat) {
-    // ---- New Spanish table format ----
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split("\t");
-      if (parts.length < 6) continue;
-
-      const rawNames = parts[0]
-        .replace(/ e /gi, ",")
-        .split(",")
-        .map((s) => s.trim().toUpperCase());
-
-      const startTime = parts[2].trim();
-      const endTime = parts[3].trim();
-      const rawPower = parts[5].replace("MW", "").trim().replace(",", ".");
-      const power = parseFloat(rawPower);
-
-      for (const name of rawNames) {
-        const site = plantNameMap[name];
-        if (!site) continue;
-
         const start = new Date(baseDate);
+        start.setHours(startH, startM, 0, 0);
         const end = new Date(baseDate);
+        end.setHours(endH, endM, 0, 0);
 
-        const [startH, startM] = startTime.split(":").map(Number);
-        const [endH, endM] = endTime.split(":").map(Number);
-
-        start.setHours(startH, startM);
-        end.setHours(endH, endM);
-
-        csvRows.push(`${site};${format(start)};${format(end)};${power}`);
+        for (const [parkName, nominal] of selectedParks) {
+          const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
+          const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
+          csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
+        }
       }
+
+      setOutput(csvRows.join("\n"));
+      return;
     }
-    setOutput(csvRows.join("\n"));
-    return;
-  }
 
-  // ---- Default: Quarter-based table ----
-  const hourLabels = lines[0].split("\t").slice(1);
-  const quarterLabels = lines[1].split("\t").slice(1);
-  const dataLines = lines.slice(2);
-
-  for (const line of dataLines) {
-    const cols = line.split("\t");
-    const rawSite = cols[0].trim().toUpperCase();
-    const site = plantNameMap[rawSite];
-    if (!site) continue;
-
-    const values = cols.slice(1);
-    let hourIndex = 0;
-
-    for (let i = 0; i < values.length; i++) {
-      const hourRange = hourLabels[hourIndex];
-      const hour = parseInt(hourRange.split("-")[0]);
-
-      const quarter = quarterLabels[i];
-      const quarterNum = parseInt(quarter.replace("Q", ""));
-      const start = new Date(baseDate);
-      start.setHours(hour);
-      start.setMinutes((quarterNum - 1) * 15);
-
-      const end = new Date(start);
-      end.setMinutes(start.getMinutes() + 15);
-
-      const raw = values[i].replace(",", ".");
-      const power = parseFloat(raw);
-
-      csvRows.push(`${site};${format(start)};${format(end)};${power}`);
-
-      if (quarter === "Q4") hourIndex++;
-    }
-  }
-
-  setOutput(csvRows.join("\n"));
-};
-
+    setOutput("Unknown table format — please check your pasted data.");
+  };
 
   const format = (d: Date) =>
     `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(
@@ -206,37 +183,36 @@ export default function CurtailmentPlanner() {
     <div className="p-4 max-w-3xl mx-auto space-y-4">
       <h1 className="text-xl font-bold">Curtailment Planner</h1>
 
-  <div className="flex gap-2">
-    <Button
-      onClick={useToday}
-      variant="outline"
-      className={
-        selectedDate === "today"
-          ? "border-blue-500 ring-2 ring-blue-300"
-          : "border-gray-300"
-      }
-    >
-      Select Today ({format(new Date(Date.now())).split(" ")[0]})
-    </Button>
+      <div className="flex gap-2">
+        <Button
+          onClick={useToday}
+          variant="outline"
+          className={
+            selectedDate === "today"
+              ? "border-blue-500 ring-2 ring-blue-300"
+              : "border-gray-300"
+          }
+        >
+          Select Today ({format(new Date(Date.now())).split(" ")[0]})
+        </Button>
 
-    <Button
-      onClick={useTomorrow}
-      variant="outline"
-      className={
-        selectedDate === "tomorrow"
-          ? "border-blue-500 ring-2 ring-blue-300"
-          : "border-gray-300"
-      }
-    >
-      Select Tomorrow ({format(new Date(Date.now() + 86400000)).split(" ")[0]})
-    </Button>
-  </div>
-
+        <Button
+          onClick={useTomorrow}
+          variant="outline"
+          className={
+            selectedDate === "tomorrow"
+              ? "border-blue-500 ring-2 ring-blue-300"
+              : "border-gray-300"
+          }
+        >
+          Select Tomorrow ({format(new Date(Date.now() + 86400000)).split(" ")[0]})
+        </Button>
+      </div>
 
       <Textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder="Paste curtailment table or email data..."
+        placeholder="Paste curtailment table (email or XLS export)..."
         className="min-h-[150px]"
       />
 
@@ -251,8 +227,7 @@ export default function CurtailmentPlanner() {
         </div>
       )}
 
-    <BackButton /> 
-
+      <BackButton />
     </div>
   );
 }
