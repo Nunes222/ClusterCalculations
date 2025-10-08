@@ -33,6 +33,10 @@ const clusters = {
     "Pitarco 2": 8.5,
     "Pitarco 3": 9,
   },
+  Douro: {
+    "Douro Solar Base": 100,
+    "Douro Solar Reeq": 20,
+  },
 };
 
 type ClusterName = keyof typeof clusters;
@@ -58,6 +62,7 @@ export default function SolarEnergyWebApp() {
     NEOEN: {},
     Alcoutim: {},
     Pitarco: {},
+    Douro: {},
   });
 
 
