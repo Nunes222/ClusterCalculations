@@ -33,6 +33,9 @@ const plantNameMap: Record<string, string> = {
   PEREIRO: "PV-PEREIRO",
   PEREIRO2: "PV-PEREIRO2",
   TRINDADE: "GBT-PV-TRINDADE",
+  "FV_DOURO": "SDX-PV-DOURO SOLAR BASE",
+  "FV_DOURO REPOWERING": "SDX-PV-DOURO SOLAR REEQ",
+
 };
 
 // ✅ Cluster definitions — short names only
@@ -50,6 +53,18 @@ const clusters: Record<string, Record<string, number>> = {
     "TORRE BELA": 50,
     "SOBREEQUI TORRE BELA": 10,
   },
+  Solaria: { 
+    AURIGA: 25,
+    "BELINCHON I": 25,
+    CEPHEUS: 25,
+    "MEDINA DEL CAMPO I": 25,
+  },
+  Douro: {
+    "FV_DOURO": 100,
+    "FV_DOURO REPOWERING": 20,
+  },
+  
+
 };
 
 
@@ -78,88 +93,112 @@ export default function CurtailmentPlanner() {
     setSelectedDate("tomorrow");
   };
 
-  const convertToCSV = () => {
-    const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
-    if (lines.length < 2) {
-      setOutput("Invalid input format.");
-      return;
-    }
+const convertToCSV = () => {
+  const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
+  if (lines.length < 2) {
+    setOutput("Invalid input format.");
+    return;
+  }
 
-    const header = lines[0].toLowerCase();
-    let csvRows: string[] = [
-      "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
-    ];
+  const header = lines[0].toLowerCase();
+  let csvRows: string[] = [
+    "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
+  ];
 
-    // --- Format A: Standard Email/Market Data Format ---
-    const isEmailFormat = header.includes("activo") && header.includes("setpoint");
+  // --- Recognize supported formats ---
+  const isEmailFormat = header.includes("activo") && header.includes("setpoint");
+  const isSpanishFormat =
+    header.includes("instalación") && header.includes("inicio") && header.includes("setpoint");
 
-    // --- Format B: Spanish Tabular Format (Instalación / Periodo / Inicio / Fin / SetPoint) ---
-    const isSpanishFormat = header.includes("instalación") && header.includes("inicio") && header.includes("setpoint");
+  if (isEmailFormat || isSpanishFormat) {
+    for (let i = 1; i < lines.length; i++) {
+      // split safely by tabs or multiple spaces
+      const parts = lines[i].split(/\t+/).map((p) => p.trim());
+      if (parts.length < 5) continue;
 
-    if (isEmailFormat || isSpanishFormat) {
-      for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split("\t");
-        if (parts.length < 5) continue;
+      const rawNames = parts[0]
+        .replace(/ e /gi, ",")
+        .split(",")
+        .map((s) => s.trim().toUpperCase());
 
-        const rawNames = parts[0]
-          .replace(/ e /gi, ",")
-          .split(",")
-          .map((s) => s.trim().toUpperCase());
+      const startTime = parts[isSpanishFormat ? 2 : 2].trim();
+      const endTime = parts[isSpanishFormat ? 3 : 3].trim();
+      const rawPower = (parts[isSpanishFormat ? 5 : 4] || "")
+        .replace(/[^\d.,-]/g, "")
+        .replace(",", ".");
+      const clusterSetpoint = parseFloat(rawPower);
+      if (isNaN(clusterSetpoint)) continue;
 
-        const startTime = parts[isSpanishFormat ? 2 : 2].trim();
-        const endTime = parts[isSpanishFormat ? 3 : 3].trim();
-        const rawPower = parts[isSpanishFormat ? 5 : 4]
-          ?.replace("MW", "")
-          .trim()
-          .replace(",", ".");
-        const clusterSetpoint = parseFloat(rawPower);
-        if (isNaN(clusterSetpoint)) continue;
-
-        // Determine cluster
-        let clusterName = "";
-        if (rawNames.some((n) => n.includes("RIO MAIOR") || n.includes("TORRE BELA")))
-          clusterName = "NEOEN";
-        else if (
-          rawNames.some((n) =>
-            n.includes("ALBERCAS") ||
-            n.includes("SÃO MARCOS") ||
-            n.includes("VIÇOSO") ||
-            n.includes("PEREIRO") ||
-            n.includes("TRINDADE")
+      // --- Determine which cluster type this row belongs to ---
+      let clusterName = "";
+      if (rawNames.some((n) => n.includes("RIO MAIOR") || n.includes("TORRE BELA")))
+        clusterName = "NEOEN";
+      else if (
+        rawNames.some((n) =>
+          ["ALBERCAS", "SÃO MARCOS", "SAO MARCOS", "VIÇOSO", "PEREIRO", "TRINDADE"].some((p) =>
+            n.includes(p)
           )
         )
-          clusterName = "Alcoutim";
+      )
+        clusterName = "Alcoutim";
+      else if (
+        rawNames.some((n) =>
+          ["AURIGA", "BELINCHON I", "CEPHEUS", "MEDINA DEL CAMPO I"].includes(n)
+        )
+      )
+        clusterName = "Solaria";
+      
+      else if (
+        rawNames.some((n) => 
+          ["FV_DOURO", "FV_DOURO REPOWERING"].includes(n)
+      )
+      )
+        clusterName = "Douro";
 
-        if (!clusterName) continue;
 
-        const clusterParks = clusters[clusterName];
-        const selectedParks = Object.entries(clusterParks).filter(([name]) =>
-          rawNames.some((n) => name.toUpperCase().includes(n))
-        );
-        const totalNominal = selectedParks.reduce((sum, [, p]) => sum + p, 0);
-        if (totalNominal === 0) continue;
+      if (!clusterName) continue;
 
-        const [startH, startM] = startTime.split(":").map(Number);
-        const [endH, endM] = endTime.split(":").map(Number);
+      const clusterParks = clusters[clusterName];
+      const selectedParks = Object.entries(clusterParks).filter(([name]) =>
+        rawNames.some((n) => n === name.toUpperCase())
+      );
 
-        const start = new Date(baseDate);
-        start.setHours(startH, startM, 0, 0);
-        const end = new Date(baseDate);
-        end.setHours(endH, endM, 0, 0);
+      const [startH, startM] = startTime.split(":").map(Number);
+      const [endH, endM] = endTime.split(":").map(Number);
+      const start = new Date(baseDate);
+      start.setHours(startH, startM, 0, 0);
+      const end = new Date(baseDate);
+      end.setHours(endH, endM, 0, 0);
 
-        for (const [parkName, nominal] of selectedParks) {
-          const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
-          const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
-          csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
+      // --- For Solaria: use the SetPoint directly (no proportional split) ---
+      if (clusterName === "Solaria") {
+        for (const [parkName] of selectedParks) {
+          const site =
+            plantNameMap[parkName.toUpperCase()] ??
+            `PV-${parkName.replace(/\s+/g, "").toUpperCase()}`;
+          csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
         }
+        continue;
       }
 
-      setOutput(csvRows.join("\n"));
-      return;
+      // --- For NEOEN/Alcoutim: distribute proportionally ---
+      const totalNominal = selectedParks.reduce((sum, [, p]) => sum + p, 0);
+      if (totalNominal === 0) continue;
+
+      for (const [parkName, nominal] of selectedParks) {
+        const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
+        const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
+        csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
+      }
     }
 
-    setOutput("Unknown table format — please check your pasted data.");
-  };
+    setOutput(csvRows.join("\n"));
+    return;
+  }
+
+  setOutput("Unknown table format — please check your pasted data.");
+};
+
 
   const format = (d: Date) =>
     `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(
