@@ -7,6 +7,7 @@ import { BackButton } from "@/components/ui/BackButton";
 
 // Mapping from short plant names to full site names
 const plantNameMap: Record<string, string> = {
+  VALEGRANDE: "WF-VALE GRANDE",
   PEREA: "PV-PEREA",
   VEGON: "PV-VEGON",
   ESCATRON: "PV-ESCATRON",
@@ -63,6 +64,10 @@ const clusters: Record<string, Record<string, number>> = {
     "FV_DOURO": 100,
     "FV_DOURO REPOWERING": 20,
   },
+  Valegrande: {
+    VALEGRANDE: 12.3, // or its nominal MW value (update if known)
+  },
+
   
 
 };
@@ -154,6 +159,8 @@ const convertToCSV = () => {
       )
       )
         clusterName = "Douro";
+      else if (rawNames.some((n) => n.includes("VALEGRANDE")))
+         clusterName = "Valegrande";
 
 
       if (!clusterName) continue;
