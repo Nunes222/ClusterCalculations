@@ -36,6 +36,15 @@ const plantNameMap: Record<string, string> = {
   TRINDADE: "GBT-PV-TRINDADE",
   "FV_DOURO": "SDX-PV-DOURO SOLAR BASE",
   "FV_DOURO REPOWERING": "SDX-PV-DOURO SOLAR REEQ",
+  MONTEGORDO: "SAT-WF MONTEGORDO",
+  "PE LAS VEGAS": "SAT-VEGAS",
+  "PE LOS ISLETES": "SAT-ISLETES",
+  "PE SERÓN II": "SAT-SERON II",
+  "PE ABUELA SANTA ANA": "SAT-ABUELA SANTA ANA",
+  "PE TIJOLA": "SAT-TIJOLA",
+  "PE SERÓN I": "SAT-SERON I",
+  "PE LA NOGUERA":  "SAT-NOGUERA"
+
 
 };
 
@@ -114,6 +123,63 @@ const convertToCSV = () => {
   const isEmailFormat = header.includes("activo") && header.includes("setpoint");
   const isSpanishFormat =
     header.includes("instalación") && header.includes("inicio") && header.includes("setpoint");
+
+  const isMatrixFormat =
+    header.includes("instalación") &&
+    lines[1]?.toLowerCase().includes("q1");
+
+    
+  // ================================
+  // MATRIX FORMAT (hour x Q tables)
+  // ================================
+  if (isMatrixFormat) {
+    const hourHeaders = lines[0].split("\t").slice(1);
+    const quarterHeaders = lines[1].split("\t").slice(1);
+
+    for (let r = 2; r < lines.length; r++) {
+      const cols = lines[r].split("\t").map(c => c.trim());
+      if (cols.length < 2) continue;
+
+      const rawPlant = cols[0]
+        .replace(/^'+/, "")
+        .trim()
+        .toUpperCase();
+
+      const site =
+        plantNameMap[rawPlant] ??
+        plantNameMap[rawPlant.replace(/\s+/g, " ")] ??
+        rawPlant;
+
+      for (let c = 1; c < cols.length; c++) {
+        if (!cols[c]) continue;
+
+        const power = parseFloat(cols[c].replace(",", "."));
+        if (isNaN(power)) continue;
+
+        const [startHour] = hourHeaders[c - 1].split("-").map(Number);
+        const quarter = quarterHeaders[c - 1];
+
+        let startMin = 0;
+        if (quarter === "Q2") startMin = 15;
+        else if (quarter === "Q3") startMin = 30;
+        else if (quarter === "Q4") startMin = 45;
+
+        const start = new Date(baseDate);
+        start.setHours(startHour, startMin, 0, 0);
+
+        const end = new Date(start);
+        end.setMinutes(start.getMinutes() + 15);
+
+        csvRows.push(
+          `${site};${format(start)};${format(end)};${power.toFixed(2)}`
+        );
+      }
+    }
+
+    setOutput(csvRows.join("\n"));
+    return;
+  }
+
 
   if (isEmailFormat || isSpanishFormat) {
     for (let i = 1; i < lines.length; i++) {
