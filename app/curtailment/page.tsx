@@ -28,6 +28,7 @@ const plantNameMap: Record<string, string> = {
   RHEA: "PV-RHEA SOLAR",
   HINOJOSAS: "PV-HINOJOSAS I",
   ALBERCAS: "PV-ALBERCAS",
+  ALBARREAL: "PV-ICTIO ALBARREAL",
   "SÃO MARCOS": "PV-SÃOMARCOS",  // normal input from Excel/email
   "SAO MARCOS": "PV-SÃOMARCOS",  // safety for unaccented versions
   VIÇOSO: "PV-VIÇOSO",
@@ -43,10 +44,23 @@ const plantNameMap: Record<string, string> = {
   "PE ABUELA SANTA ANA": "SAT-ABUELA SANTA ANA",
   "PE TIJOLA": "SAT-TIJOLA",
   "PE SERÓN I": "SAT-SERON I",
-  "PE LA NOGUERA":  "SAT-NOGUERA"
-
+  "PE LA NOGUERA":  "SAT-NOGUERA",
+  "PE COLMENAR II": "SAT-EL COLMENAR II"
 
 };
+
+// Composite plants with fixed distribution (matrix format)
+const compositePlants: Record<
+  string,
+  { site: string; share: number }[]
+> = {
+  "PITARCO A+B+C": [
+    { site: "PV-PITARCO1", share: 0.6 },
+    { site: "PV-PITARCO2", share: 0.2 },
+    { site: "PV-PITARCO3", share: 0.2 },
+  ],
+};
+
 
 // ✅ Cluster definitions — short names only
 const clusters: Record<string, Record<string, number>> = {
@@ -135,6 +149,7 @@ const convertToCSV = () => {
   if (isMatrixFormat) {
     const hourHeaders = lines[0].split("\t").slice(1);
     const quarterHeaders = lines[1].split("\t").slice(1);
+    
 
     for (let r = 2; r < lines.length; r++) {
       const cols = lines[r].split("\t").map(c => c.trim());
@@ -145,10 +160,13 @@ const convertToCSV = () => {
         .trim()
         .toUpperCase();
 
-      const site =
+      const composite = compositePlants[rawPlant];
+
+      const defaultSite =
         plantNameMap[rawPlant] ??
         plantNameMap[rawPlant.replace(/\s+/g, " ")] ??
         rawPlant;
+
 
       for (let c = 1; c < cols.length; c++) {
         if (!cols[c]) continue;
@@ -170,9 +188,19 @@ const convertToCSV = () => {
         const end = new Date(start);
         end.setMinutes(start.getMinutes() + 15);
 
+      if (composite) {
+        for (const part of composite) {
+          const allocated = power * part.share;
+          csvRows.push(
+            `${part.site};${format(start)};${format(end)};${allocated.toFixed(2)}`
+          );
+        }
+      } else {
         csvRows.push(
-          `${site};${format(start)};${format(end)};${power.toFixed(2)}`
+          `${defaultSite};${format(start)};${format(end)};${power.toFixed(2)}`
         );
+      }
+
       }
     }
 
