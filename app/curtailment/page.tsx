@@ -9,7 +9,7 @@ import { BackButton } from "@/components/ui/BackButton";
 const plantNameMap: Record<string, string> = {
   VALEGRANDE: "WF-VALE GRANDE",
   PEREA: "PV-PEREA",
-  VEGON: "PV-VEGON",
+  VEGON: "PV-EL VEGON",
   ESCATRON: "PV-ESCATRON",
   ENVITERO: "PV-ENVITERO",
   LOGRO: "PV-LOGRO",
@@ -96,7 +96,7 @@ const clusters: Record<string, Record<string, number>> = {
     "FV_DOURO REPOWERING": 20,
   },
   Valegrande: {
-    VALEGRANDE: 12.3, // or its nominal MW value (update if known)
+    VALEGRANDE: 12.3, 
   },
 
   
