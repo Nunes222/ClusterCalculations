@@ -369,6 +369,9 @@ const convertToCSV = () => {
   }
 
 
+  const isBESSCurveFormat =
+    lines[0].toLowerCase().includes("qh");
+
 
   if (isEmailFormat || isSpanishFormat) {
     for (let i = 1; i < lines.length; i++) {
@@ -457,6 +460,90 @@ const convertToCSV = () => {
     setOutput(csvRows.join("\n"));
     return;
   }
+  // =======================================
+  // BESS CURVE FORMAT (Qh schedule)
+  // Generates ramped 5-minute transitions
+  // =======================================
+
+
+if (isBESSCurveFormat) {
+  const site = "VICOSO BESS";
+
+  type Entry = { start: Date; end: Date; power: number };
+  const entries: Entry[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(/\t+/).map((p) => p.trim());
+    if (parts.length < 5) continue;
+
+    const startTime = parts[1];
+    const endTime = parts[2];
+
+    const charge = parseFloat(parts[3].replace(",", "."));
+    const discharge = parseFloat(parts[4].replace(",", "."));
+
+    let power = 0;
+    if (!isNaN(charge) && charge !== 0) power = charge;
+    if (!isNaN(discharge) && discharge !== 0) power = discharge;
+
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+
+    const start = new Date(baseDate);
+    start.setHours(sh, sm, 0, 0);
+
+    const end = new Date(baseDate);
+    end.setHours(eh, em, 0, 0);
+
+    entries.push({ start, end, power });
+  }
+
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    const prev = entries[i - 1];
+    const next = entries[i + 1];
+
+    // START of battery action (0 -> non-zero)
+    if (e.power !== 0 && (!prev || prev.power === 0)) {
+      const sign = Math.sign(e.power);
+
+      const t1 = new Date(e.start);
+      const t2 = new Date(e.start);
+      const t3 = new Date(e.start);
+
+      t2.setMinutes(t2.getMinutes() + 5);
+      t3.setMinutes(t3.getMinutes() + 10);
+
+      csvRows.push(`${site};${format(t1)};${format(t2)};${(0.6 * sign).toFixed(2)}`);
+      csvRows.push(`${site};${format(t2)};${format(t3)};${(2.5 * sign).toFixed(2)}`);
+
+      if (e.end > t3) {
+        csvRows.push(`${site};${format(t3)};${format(e.end)};${(5 * sign).toFixed(2)}`);
+      }
+      continue;
+    }
+
+    // END of battery action (non-zero -> 0)
+    if (e.power !== 0 && next && next.power === 0) {
+      const sign = Math.sign(e.power);
+
+      csvRows.push(
+        `${site};${format(e.start)};${format(e.end)};${(2.5 * sign).toFixed(2)}`
+      );
+      continue;
+    }
+
+    // FULL POWER segment
+    if (e.power !== 0) {
+      csvRows.push(
+        `${site};${format(e.start)};${format(e.end)};${(5 * Math.sign(e.power)).toFixed(2)}`
+      );
+    }
+  }
+
+  setOutput(csvRows.join("\n"));
+  return;
+}
 
   setOutput("Unknown table format — please check your pasted data.");
 };
