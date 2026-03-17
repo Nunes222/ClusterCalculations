@@ -5,7 +5,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/BackButton";
 
-// Mapping from short plant names to full site names
 const plantNameMap: Record<string, string> = {
   VALEGRANDE: "WF-VALE GRANDE",
   PEREA: "PV-PEREA",
@@ -29,8 +28,8 @@ const plantNameMap: Record<string, string> = {
   HINOJOSAS: "PV-HINOJOSAS I",
   ALBERCAS: "PV-ALBERCAS",
   ALBARREAL: "PV-ICTIO ALBARREAL",
-  "SÃO MARCOS": "PV-SÃOMARCOS",  // normal input from Excel/email
-  "SAO MARCOS": "PV-SÃOMARCOS",  // safety for unaccented versions
+  "SÃO MARCOS": "PV-SÃOMARCOS",
+  "SAO MARCOS": "PV-SÃOMARCOS",
   VIÇOSO: "PV-VIÇOSO",
   PEREIRO: "PV-PEREIRO",
   PEREIRO2: "PV-PEREIRO2",
@@ -47,21 +46,28 @@ const plantNameMap: Record<string, string> = {
   "PE ABUELA SANTA": "SAT-ABUELA SANTA ANA",
   "PE TIJOLA": "SAT-TIJOLA",
   "PE SERÓN I": "SAT-SERON I",
-  "PE LA NOGUERA":  "SAT-NOGUERA",
+  "PE LA NOGUERA": "SAT-NOGUERA",
   "PE COLMENAR II": "SAT-EL COLMENAR II",
   "FORAL": "NON-FORAL",
   "VALDECARRO": "PV-VALDECARRO",
   "ALCAZAR I": "PV-ALCAZAR I",
   "ALCAZAR II": "PV-ALCAZAR II",
-  "VALDIVIESO": "PV-VALDIVIESO"
-
+  "VALDIVIESO": "PV-VALDIVIESO",
+  "VILLAMAYOR I": "OPDE - VILLAMAYOR",
+  "VILLAMAYOR II": "OPDE - VILLAMAYOR",
+  "VILLAMAYOR I & II": "OPDE - VILLAMAYOR",
+  "PEÑA NEBINA": "OPDE - PEÑA NEBINA",
+  "PENA NEBINA": "OPDE - PEÑA NEBINA",
 };
 
-// Composite plants with fixed distribution (matrix format)
-const compositePlants: Record<
-  string,
-  { site: string; share: number }[]
-> = {
+// OPDE: keyword-based lookup — if the raw plant field contains these substrings,
+// emit the corresponding site. No splitting or cluster matching needed.
+const opdeKeywords: { keyword: string; site: string }[] = [
+  { keyword: "VILLAMAYOR", site: "OPDE - VILLAMAYOR" },
+  { keyword: "NEBINA", site: "OPDE - PEÑA NEBINA" },
+];
+
+const compositePlants: Record<string, { site: string; share: number }[]> = {
   "PITARCO A+B+C": [
     { site: "PV-PITARCO1", share: 0.6 },
     { site: "PV-PITARCO2", share: 0.2 },
@@ -69,8 +75,6 @@ const compositePlants: Record<
   ],
 };
 
-
-// ✅ Cluster definitions — short names only
 const clusters: Record<string, Record<string, number>> = {
   Alcoutim: {
     ALBERCAS: 25.5,
@@ -86,7 +90,7 @@ const clusters: Record<string, Record<string, number>> = {
     "SOBREEQUI TORRE BELA": 10,
     "FORAL": 36,
   },
-  Solaria: { 
+  Solaria: {
     AURIGA: 25,
     "BELINCHON I": 25,
     CEPHEUS: 25,
@@ -97,13 +101,9 @@ const clusters: Record<string, Record<string, number>> = {
     "FV_DOURO REPOWERING": 20,
   },
   Valegrande: {
-    VALEGRANDE: 12.3, 
+    VALEGRANDE: 12.3,
   },
-
-  
-
 };
-
 
 export default function CurtailmentPlanner() {
   const [input, setInput] = useState("");
@@ -130,106 +130,281 @@ export default function CurtailmentPlanner() {
     setSelectedDate("tomorrow");
   };
 
-const convertToCSV = () => {
-  const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
-  if (lines.length < 2) {
-    setOutput("Invalid input format.");
-    return;
-  }
+  // Returns OPDE site names found anywhere in the raw plant field string.
+  // e.g. "VILLAMAYOR I & II, y PEÑA NEBINA" → ["OPDE - VILLAMAYOR", "OPDE - PENA NEBINA"]
+  const resolveOPDE = (rawField: string): string[] => {
+    const upper = rawField.toUpperCase();
+    const found: string[] = [];
+    for (const { keyword, site } of opdeKeywords) {
+      if (upper.includes(keyword) && !found.includes(site)) {
+        found.push(site);
+      }
+    }
+    return found;
+  };
 
-  const header = lines[0].toLowerCase();
-  let csvRows: string[] = [
-    "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
-  ];
+  const convertToCSV = () => {
+    const lines = input.trim().split("\n").filter((l) => l.trim() !== "");
+    if (lines.length < 2) {
+      setOutput("Invalid input format.");
+      return;
+    }
 
-  
-  // --- Recognize supported formats ---
-  const isEmailFormat = header.includes("activo") && header.includes("setpoint");
-  const isSpanishFormat =
-    header.includes("instalación") && header.includes("inicio") && header.includes("setpoint");
+    const header = lines[0].toLowerCase();
+    let csvRows: string[] = [
+      "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
+    ];
 
-  const isMatrixFormat =
-    header.includes("instalación") &&
-    lines[1]?.toLowerCase().includes("q1");
-  
-  // New format: Activo, Market Hour, Start, End, SetPoint (one row per period)
-  const isVerticalSinglePlantFormat = 
-    header.includes("activo") && 
-    header.includes("market hour") && 
-    header.includes("start") && 
-    header.includes("end");
+    const isEmailFormat = header.includes("activo") && header.includes("setpoint");
+    const isSpanishFormat =
+      header.includes("instalación") && header.includes("inicio") && header.includes("setpoint");
+    const isMatrixFormat =
+      header.includes("instalación") && lines[1]?.toLowerCase().includes("q1");
+    const isVerticalSinglePlantFormat =
+      header.includes("activo") &&
+      header.includes("market hour") &&
+      header.includes("start") &&
+      header.includes("end");
 
-  // =======================================
-  // VERTICAL SINGLE-PLANT FORMAT (with cluster support)
-  // Format: Activo | Market Hour | Start | End | SetPoint
-  // Can contain single plant OR cluster of plants separated by "," "e" or "y"
-  // =======================================
-  if (isVerticalSinglePlantFormat && !isMatrixFormat) {
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(/\t+/).map((p) => p.trim());
-      if (parts.length < 5) continue;
+    // =======================================
+    // VERTICAL SINGLE-PLANT FORMAT
+    // =======================================
+    if (isVerticalSinglePlantFormat && !isMatrixFormat) {
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(/\t+/).map((p) => p.trim());
+        if (parts.length < 5) continue;
 
-      const rawPlantField = parts[0].trim();
-      const startTime = parts[2].trim();
-      const endTime = parts[3].trim();
-      const rawPower = (parts[4] || "")
-        .replace(/[^\d.,-]/g, "")
-        .replace(",", ".");
-      
-      const clusterSetpoint = parseFloat(rawPower);
-      if (isNaN(clusterSetpoint)) continue;
+        const startTime = parts[2].trim();
+        const endTime = parts[3].trim();
+        const rawPower = (parts[4] || "").replace(/[^\d.,-]/g, "").replace(",", ".");
+        const clusterSetpoint = parseFloat(rawPower);
+        if (isNaN(clusterSetpoint)) continue;
 
-      const [startH, startM] = startTime.split(":").map(Number);
-      const [endH, endM] = endTime.split(":").map(Number);
+        const [startH, startM] = startTime.split(":").map(Number);
+        const [endH, endM] = endTime.split(":").map(Number);
+        const start = new Date(baseDate);
+        start.setHours(startH, startM, 0, 0);
+        const end = new Date(baseDate);
+        end.setHours(endH, endM, 0, 0);
 
-      const start = new Date(baseDate);
-      start.setHours(startH, startM, 0, 0);
+        // OPDE: check by keyword before any other logic
+        const opdeSites = resolveOPDE(parts[0]);
+        if (opdeSites.length > 0) {
+          for (const site of opdeSites) {
+            csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
+          }
+          continue;
+        }
 
-      const end = new Date(baseDate);
-      end.setHours(endH, endM, 0, 0);
+        const rawNames = parts[0]
+          .replace(/ e /gi, ",")
+          .replace(/ y /gi, ",")
+          .replace(/ & /gi, ",")
+          .split(",")
+          .map((s) => s.trim().toUpperCase());
 
-      // Parse multiple plants separated by "," "e" or "y"
-      const rawNames = rawPlantField
-        .replace(/ e /gi, ",")
-        .replace(/ y /gi, ",")
-        .split(",")
-        .map((s) => s.trim().toUpperCase());
-
-      // Check if this is a cluster that needs distribution
-      let clusterName = "";
-      if (rawNames.some((n) => n.includes("RIO MAIOR") || n.includes("TORRE BELA")))
-        clusterName = "NEOEN";
-      else if (
-        rawNames.some((n) =>
-          ["ALBERCAS", "SÃO MARCOS", "SAO MARCOS", "VIÇOSO", "PEREIRO", "TRINDADE"].some((p) =>
-            n.includes(p)
+        let clusterName = "";
+        if (rawNames.some((n) => n.includes("RIO MAIOR") || n.includes("TORRE BELA")))
+          clusterName = "NEOEN";
+        else if (
+          rawNames.some((n) =>
+            ["ALBERCAS", "SÃO MARCOS", "SAO MARCOS", "VIÇOSO", "PEREIRO", "TRINDADE"].some((p) =>
+              n.includes(p)
+            )
           )
         )
-      )
-        clusterName = "Alcoutim";
-      else if (
-        rawNames.some((n) =>
-          ["AURIGA", "BELINCHON I", "CEPHEUS", "MEDINA DEL CAMPO I"].includes(n)
+          clusterName = "Alcoutim";
+        else if (
+          rawNames.some((n) =>
+            ["AURIGA", "BELINCHON I", "CEPHEUS", "MEDINA DEL CAMPO I"].includes(n)
+          )
         )
-      )
-        clusterName = "Solaria";
-      else if (
-        rawNames.some((n) => 
-          ["FV_DOURO", "FV_DOURO REPOWERING"].includes(n)
-        )
-      )
-        clusterName = "Douro";
-      else if (rawNames.some((n) => n.includes("VALEGRANDE")))
-        clusterName = "Valegrande";
+          clusterName = "Solaria";
+        else if (rawNames.some((n) => ["FV_DOURO", "FV_DOURO REPOWERING"].includes(n)))
+          clusterName = "Douro";
+        else if (rawNames.some((n) => n.includes("VALEGRANDE")))
+          clusterName = "Valegrande";
 
-      // If it's a cluster, distribute proportionally
-      if (clusterName) {
+        if (clusterName) {
+          const clusterParks = clusters[clusterName];
+          const selectedParks = Object.entries(clusterParks).filter(([name]) =>
+            rawNames.some((n) => n === name.toUpperCase())
+          );
+          if (clusterName === "Solaria") {
+            for (const [parkName] of selectedParks) {
+              const site =
+                plantNameMap[parkName.toUpperCase()] ??
+                `PV-${parkName.replace(/\s+/g, "").toUpperCase()}`;
+              csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
+            }
+          } else {
+            const totalNominal = selectedParks.reduce((sum, [, p]) => sum + p, 0);
+            if (totalNominal > 0) {
+              for (const [parkName, nominal] of selectedParks) {
+                const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
+                const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
+                csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
+              }
+            }
+          }
+        } else {
+          const site = plantNameMap[rawNames[0]] ?? rawNames[0];
+          csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
+        }
+      }
+
+      setOutput(csvRows.join("\n"));
+      return;
+    }
+
+    // ================================
+    // MATRIX FORMAT
+    // ================================
+    if (isMatrixFormat) {
+      const hourHeaders = lines[0].split("\t").slice(1);
+      const quarterHeaders = lines[1].split("\t").slice(1);
+
+      for (let r = 2; r < lines.length; r++) {
+        const cols = lines[r].split("\t").map((c) => c.trim());
+        if (cols.length < 2) continue;
+
+        const rawPlant = cols[0].replace(/^'+/, "").trim().toUpperCase();
+        const composite = compositePlants[rawPlant];
+        const defaultSite =
+          plantNameMap[rawPlant] ?? plantNameMap[rawPlant.replace(/\s+/g, " ")] ?? rawPlant;
+
+        for (let c = 1; c < cols.length; c++) {
+          if (!cols[c]) continue;
+          const power = parseFloat(cols[c].replace(",", "."));
+          if (isNaN(power)) continue;
+
+          const hourPart = hourHeaders[c - 1];
+          const startHour = parseInt(hourPart.split("-")[0]);
+          const quarter = quarterHeaders[c - 1];
+
+          let startMin = 0;
+          if (quarter === "Q2") startMin = 15;
+          else if (quarter === "Q3") startMin = 30;
+          else if (quarter === "Q4") startMin = 45;
+
+          const start = new Date(baseDate);
+          start.setHours(startHour, startMin, 0, 0);
+          const end = new Date(start);
+          end.setMinutes(start.getMinutes() + 15);
+
+          if (composite) {
+            for (const part of composite) {
+              const allocated = power * part.share;
+              csvRows.push(`${part.site};${format(start)};${format(end)};${allocated.toFixed(2)}`);
+            }
+          } else {
+            csvRows.push(`${defaultSite};${format(start)};${format(end)};${power.toFixed(2)}`);
+          }
+        }
+      }
+
+      setOutput(csvRows.join("\n"));
+      return;
+    }
+
+    // =======================================
+    // VERTICAL EMAIL EXPORT FORMAT (6 lines per entry)
+    // =======================================
+    if (isEmailFormat && lines[1].toLowerCase().includes("market")) {
+      for (let i = 5; i < lines.length; i += 6) {
+        const rawPlant = lines[i]?.trim().toUpperCase();
+        const startTime = lines[i + 2]?.trim();
+        const endTime = lines[i + 3]?.trim();
+        const rawPower = lines[i + 4]?.replace(/[^\d.,-]/g, "").replace(",", ".");
+
+        if (!rawPlant || !startTime || !endTime || !rawPower) continue;
+        const power = parseFloat(rawPower);
+        if (isNaN(power)) continue;
+
+        const [startH, startM] = startTime.split(":").map(Number);
+        const [endH, endM] = endTime.split(":").map(Number);
+        const start = new Date(baseDate);
+        start.setHours(startH, startM, 0, 0);
+        const end = new Date(baseDate);
+        end.setHours(endH, endM, 0, 0);
+
+        const site = plantNameMap[rawPlant] ?? rawPlant;
+        csvRows.push(`${site};${format(start)};${format(end)};${power.toFixed(2)}`);
+      }
+
+      setOutput(csvRows.join("\n"));
+      return;
+    }
+
+    const isBESSCurveFormat = lines[0].toLowerCase().includes("qh");
+
+    // =======================================
+    // SPANISH / EMAIL TABULAR FORMAT
+    // =======================================
+    if (isEmailFormat || isSpanishFormat) {
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(/\t+/).map((p) => p.trim());
+        if (parts.length < 5) continue;
+
+        const startTime = parts[2].trim();
+        const endTime = parts[3].trim();
+        const rawPower = (parts[isSpanishFormat ? 5 : 4] || "")
+          .replace(/[^\d.,-]/g, "")
+          .replace(",", ".");
+        const clusterSetpoint = parseFloat(rawPower);
+        if (isNaN(clusterSetpoint)) continue;
+
+        const [startH, startM] = startTime.split(":").map(Number);
+        const [endH, endM] = endTime.split(":").map(Number);
+        const start = new Date(baseDate);
+        start.setHours(startH, startM, 0, 0);
+        const end = new Date(baseDate);
+        end.setHours(endH, endM, 0, 0);
+
+        // OPDE: check by keyword before any other logic
+        const opdeSites = resolveOPDE(parts[0]);
+        if (opdeSites.length > 0) {
+          for (const site of opdeSites) {
+            csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
+          }
+          continue;
+        }
+
+        const rawNames = parts[0]
+          .replace(/ e /gi, ",")
+          .replace(/ y /gi, ",")
+          .split(",")
+          .map((s) => s.trim().toUpperCase());
+
+        let clusterName = "";
+        if (rawNames.some((n) => n.includes("RIO MAIOR") || n.includes("TORRE BELA")))
+          clusterName = "NEOEN";
+        else if (
+          rawNames.some((n) =>
+            ["ALBERCAS", "SÃO MARCOS", "SAO MARCOS", "VIÇOSO", "PEREIRO", "TRINDADE"].some((p) =>
+              n.includes(p)
+            )
+          )
+        )
+          clusterName = "Alcoutim";
+        else if (
+          rawNames.some((n) =>
+            ["AURIGA", "BELINCHON I", "CEPHEUS", "MEDINA DEL CAMPO I"].includes(n)
+          )
+        )
+          clusterName = "Solaria";
+        else if (rawNames.some((n) => ["FV_DOURO", "FV_DOURO REPOWERING"].includes(n)))
+          clusterName = "Douro";
+        else if (rawNames.some((n) => n.includes("VALEGRANDE")))
+          clusterName = "Valegrande";
+
+        if (!clusterName) continue;
+
         const clusterParks = clusters[clusterName];
         const selectedParks = Object.entries(clusterParks).filter(([name]) =>
           rawNames.some((n) => n === name.toUpperCase())
         );
 
-        // For Solaria: use SetPoint directly (no proportional split)
         if (clusterName === "Solaria") {
           for (const [parkName] of selectedParks) {
             const site =
@@ -237,333 +412,102 @@ const convertToCSV = () => {
               `PV-${parkName.replace(/\s+/g, "").toUpperCase()}`;
             csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
           }
-        } else {
-          // For NEOEN/Alcoutim/Douro: distribute proportionally
-          const totalNominal = selectedParks.reduce((sum, [, p]) => sum + p, 0);
-          if (totalNominal > 0) {
-            for (const [parkName, nominal] of selectedParks) {
-              const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
-              const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
-              csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
-            }
-          }
+          continue;
         }
-      } else {
-        // Single plant - no distribution needed
-        const site = plantNameMap[rawNames[0]] ?? rawNames[0];
-        csvRows.push(
-          `${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`
-        );
+
+        const totalNominal = selectedParks.reduce((sum, [, p]) => sum + p, 0);
+        if (totalNominal === 0) continue;
+
+        for (const [parkName, nominal] of selectedParks) {
+          const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
+          const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
+          csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
+        }
       }
+
+      setOutput(csvRows.join("\n"));
+      return;
     }
 
-    setOutput(csvRows.join("\n"));
-    return;
-  }
-    
-  // ================================
-  // MATRIX FORMAT (hour x Q tables)
-  // ================================
-  if (isMatrixFormat) {
-    const hourHeaders = lines[0].split("\t").slice(1);
-    const quarterHeaders = lines[1].split("\t").slice(1);
-    
+    // =======================================
+    // BESS CURVE FORMAT
+    // =======================================
+    if (isBESSCurveFormat) {
+      const site = "VICOSO BESS";
+      type Entry = { start: Date; end: Date; power: number };
+      const entries: Entry[] = [];
 
-    for (let r = 2; r < lines.length; r++) {
-      const cols = lines[r].split("\t").map(c => c.trim());
-      if (cols.length < 2) continue;
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(/\t+/).map((p) => p.trim());
+        if (parts.length < 5) continue;
 
-      const rawPlant = cols[0]
-        .replace(/^'+/, "")
-        .trim()
-        .toUpperCase();
+        const startTime = parts[1];
+        const endTime = parts[2];
+        const charge = parseFloat(parts[3].replace(",", "."));
+        const discharge = parseFloat(parts[4].replace(",", "."));
 
-      // Check if this is a composite plant
-      const composite = compositePlants[rawPlant];
+        let power = 0;
+        if (!isNaN(charge) && charge !== 0) power = charge;
+        if (!isNaN(discharge) && discharge !== 0) power = discharge;
 
-      // Get the default site mapping
-      const defaultSite =
-        plantNameMap[rawPlant] ??
-        plantNameMap[rawPlant.replace(/\s+/g, " ")] ??
-        rawPlant;
-
-
-      for (let c = 1; c < cols.length; c++) {
-        if (!cols[c]) continue;
-
-        const power = parseFloat(cols[c].replace(",", "."));
-        if (isNaN(power)) continue;
-
-        // Parse hour from header (e.g., "15-16" -> 15)
-        const hourPart = hourHeaders[c - 1];
-        const startHour = parseInt(hourPart.split("-")[0]);
-        const quarter = quarterHeaders[c - 1];
-
-        let startMin = 0;
-        if (quarter === "Q2") startMin = 15;
-        else if (quarter === "Q3") startMin = 30;
-        else if (quarter === "Q4") startMin = 45;
-
+        const [sh, sm] = startTime.split(":").map(Number);
+        const [eh, em] = endTime.split(":").map(Number);
         const start = new Date(baseDate);
-        start.setHours(startHour, startMin, 0, 0);
+        start.setHours(sh, sm, 0, 0);
+        const end = new Date(baseDate);
+        end.setHours(eh, em, 0, 0);
+        entries.push({ start, end, power });
+      }
 
-        const end = new Date(start);
-        end.setMinutes(start.getMinutes() + 15);
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        const prev = entries[i - 1];
+        const next = entries[i + 1];
 
-        // If it's a composite plant, distribute power according to shares
-        if (composite) {
-          for (const part of composite) {
-            const allocated = power * part.share;
-            csvRows.push(
-              `${part.site};${format(start)};${format(end)};${allocated.toFixed(2)}`
-            );
+        if (e.power !== 0 && (!prev || prev.power === 0)) {
+          const sign = Math.sign(e.power);
+          const t1 = new Date(e.start);
+          const t2 = new Date(e.start);
+          const t3 = new Date(e.start);
+          t2.setMinutes(t2.getMinutes() + 5);
+          t3.setMinutes(t3.getMinutes() + 10);
+          csvRows.push(`${site};${format(t1)};${format(t2)};${(0.6 * sign).toFixed(2)}`);
+          csvRows.push(`${site};${format(t2)};${format(t3)};${(2.5 * sign).toFixed(2)}`);
+          if (e.end > t3) {
+            csvRows.push(`${site};${format(t3)};${format(e.end)};${(5 * sign).toFixed(2)}`);
           }
-        } else {
-          // Regular plant - use direct mapping
-          csvRows.push(
-            `${defaultSite};${format(start)};${format(end)};${power.toFixed(2)}`
-          );
+          continue;
+        }
+
+        if (e.power !== 0 && next && next.power === 0) {
+          const sign = Math.sign(e.power);
+          csvRows.push(`${site};${format(e.start)};${format(e.end)};${(2.5 * sign).toFixed(2)}`);
+          continue;
+        }
+
+        if (e.power !== 0) {
+          csvRows.push(`${site};${format(e.start)};${format(e.end)};${(5 * Math.sign(e.power)).toFixed(2)}`);
         }
       }
+
+      setOutput(csvRows.join("\n"));
+      return;
     }
 
-    setOutput(csvRows.join("\n"));
-    return;
-  }
-
-  // =======================================
-  // VERTICAL EMAIL EXPORT FORMAT (6 lines per entry)
-  // =======================================
-  if (isEmailFormat && lines[1].toLowerCase().includes("market")) {
-    for (let i = 5; i < lines.length; i += 6) {
-      const rawPlant = lines[i]?.trim().toUpperCase();
-      const startTime = lines[i + 2]?.trim();
-      const endTime = lines[i + 3]?.trim();
-      const rawPower = lines[i + 4]
-        ?.replace(/[^\d.,-]/g, "")
-        .replace(",", ".");
-
-      if (!rawPlant || !startTime || !endTime || !rawPower) continue;
-
-      const power = parseFloat(rawPower);
-      if (isNaN(power)) continue;
-
-      const [startH, startM] = startTime.split(":").map(Number);
-      const [endH, endM] = endTime.split(":").map(Number);
-
-      const start = new Date(baseDate);
-      start.setHours(startH, startM, 0, 0);
-
-      const end = new Date(baseDate);
-      end.setHours(endH, endM, 0, 0);
-
-      const site = plantNameMap[rawPlant] ?? rawPlant;
-
-      csvRows.push(
-        `${site};${format(start)};${format(end)};${power.toFixed(2)}`
-      );
-    }
-
-    setOutput(csvRows.join("\n"));
-    return;
-  }
-
-
-  const isBESSCurveFormat =
-    lines[0].toLowerCase().includes("qh");
-
-
-  if (isEmailFormat || isSpanishFormat) {
-    for (let i = 1; i < lines.length; i++) {
-      // split safely by tabs or multiple spaces
-      const parts = lines[i].split(/\t+/).map((p) => p.trim());
-      if (parts.length < 5) continue;
-
-      const rawNames = parts[0]
-        .replace(/ e /gi, ",")
-        .split(",")
-        .map((s) => s.trim().toUpperCase());
-
-      const startTime = parts[isSpanishFormat ? 2 : 2].trim();
-      const endTime = parts[isSpanishFormat ? 3 : 3].trim();
-      const rawPower = (parts[isSpanishFormat ? 5 : 4] || "")
-        .replace(/[^\d.,-]/g, "")
-        .replace(",", ".");
-      const clusterSetpoint = parseFloat(rawPower);
-      if (isNaN(clusterSetpoint)) continue;
-
-      // --- Determine which cluster type this row belongs to ---
-      let clusterName = "";
-      if (rawNames.some((n) => n.includes("RIO MAIOR") || n.includes("TORRE BELA")))
-        clusterName = "NEOEN";
-      else if (
-        rawNames.some((n) =>
-          ["ALBERCAS", "SÃO MARCOS", "SAO MARCOS", "VIÇOSO", "PEREIRO", "TRINDADE"].some((p) =>
-            n.includes(p)
-          )
-        )
-      )
-        clusterName = "Alcoutim";
-      else if (
-        rawNames.some((n) =>
-          ["AURIGA", "BELINCHON I", "CEPHEUS", "MEDINA DEL CAMPO I"].includes(n)
-        )
-      )
-        clusterName = "Solaria";
-      
-      else if (
-        rawNames.some((n) => 
-          ["FV_DOURO", "FV_DOURO REPOWERING"].includes(n)
-      )
-      )
-        clusterName = "Douro";
-      else if (rawNames.some((n) => n.includes("VALEGRANDE")))
-         clusterName = "Valegrande";
-
-
-      if (!clusterName) continue;
-
-      const clusterParks = clusters[clusterName];
-      const selectedParks = Object.entries(clusterParks).filter(([name]) =>
-        rawNames.some((n) => n === name.toUpperCase())
-      );
-
-      const [startH, startM] = startTime.split(":").map(Number);
-      const [endH, endM] = endTime.split(":").map(Number);
-      const start = new Date(baseDate);
-      start.setHours(startH, startM, 0, 0);
-      const end = new Date(baseDate);
-      end.setHours(endH, endM, 0, 0);
-
-      // --- For Solaria: use the SetPoint directly (no proportional split) ---
-      if (clusterName === "Solaria") {
-        for (const [parkName] of selectedParks) {
-          const site =
-            plantNameMap[parkName.toUpperCase()] ??
-            `PV-${parkName.replace(/\s+/g, "").toUpperCase()}`;
-          csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
-        }
-        continue;
-      }
-
-      // --- For NEOEN/Alcoutim: distribute proportionally ---
-      const totalNominal = selectedParks.reduce((sum, [, p]) => sum + p, 0);
-      if (totalNominal === 0) continue;
-
-      for (const [parkName, nominal] of selectedParks) {
-        const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
-        const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
-        csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
-      }
-    }
-
-    setOutput(csvRows.join("\n"));
-    return;
-  }
-  // =======================================
-  // BESS CURVE FORMAT (Qh schedule)
-  // Generates ramped 5-minute transitions
-  // =======================================
-
-
-if (isBESSCurveFormat) {
-  const site = "VICOSO BESS";
-
-  type Entry = { start: Date; end: Date; power: number };
-  const entries: Entry[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(/\t+/).map((p) => p.trim());
-    if (parts.length < 5) continue;
-
-    const startTime = parts[1];
-    const endTime = parts[2];
-
-    const charge = parseFloat(parts[3].replace(",", "."));
-    const discharge = parseFloat(parts[4].replace(",", "."));
-
-    let power = 0;
-    if (!isNaN(charge) && charge !== 0) power = charge;
-    if (!isNaN(discharge) && discharge !== 0) power = discharge;
-
-    const [sh, sm] = startTime.split(":").map(Number);
-    const [eh, em] = endTime.split(":").map(Number);
-
-    const start = new Date(baseDate);
-    start.setHours(sh, sm, 0, 0);
-
-    const end = new Date(baseDate);
-    end.setHours(eh, em, 0, 0);
-
-    entries.push({ start, end, power });
-  }
-
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i];
-    const prev = entries[i - 1];
-    const next = entries[i + 1];
-
-    // START of battery action (0 -> non-zero)
-    if (e.power !== 0 && (!prev || prev.power === 0)) {
-      const sign = Math.sign(e.power);
-
-      const t1 = new Date(e.start);
-      const t2 = new Date(e.start);
-      const t3 = new Date(e.start);
-
-      t2.setMinutes(t2.getMinutes() + 5);
-      t3.setMinutes(t3.getMinutes() + 10);
-
-      csvRows.push(`${site};${format(t1)};${format(t2)};${(0.6 * sign).toFixed(2)}`);
-      csvRows.push(`${site};${format(t2)};${format(t3)};${(2.5 * sign).toFixed(2)}`);
-
-      if (e.end > t3) {
-        csvRows.push(`${site};${format(t3)};${format(e.end)};${(5 * sign).toFixed(2)}`);
-      }
-      continue;
-    }
-
-    // END of battery action (non-zero -> 0)
-    if (e.power !== 0 && next && next.power === 0) {
-      const sign = Math.sign(e.power);
-
-      csvRows.push(
-        `${site};${format(e.start)};${format(e.end)};${(2.5 * sign).toFixed(2)}`
-      );
-      continue;
-    }
-
-    // FULL POWER segment
-    if (e.power !== 0) {
-      csvRows.push(
-        `${site};${format(e.start)};${format(e.end)};${(5 * Math.sign(e.power)).toFixed(2)}`
-      );
-    }
-  }
-
-  setOutput(csvRows.join("\n"));
-  return;
-}
-
-  setOutput("Unknown table format — please check your pasted data.");
-};
-
+    setOutput("Unknown table format — please check your pasted data.");
+  };
 
   const format = (d: Date) =>
-    `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(
-      d.getHours()
-    )}:${pad(d.getMinutes())}`;
+    `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const pad = (n: number) => (n < 10 ? "0" + n : n);
 
   const downloadCSV = () => {
     const blob = new Blob([output], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-
     const a = document.createElement("a");
     a.href = url;
     a.download = "curtailment.csv";
     a.click();
-
     URL.revokeObjectURL(url);
   };
 
@@ -576,21 +520,16 @@ if (isBESSCurveFormat) {
           onClick={useToday}
           variant="outline"
           className={
-            selectedDate === "today"
-              ? "border-blue-500 ring-2 ring-blue-300"
-              : "border-gray-300"
+            selectedDate === "today" ? "border-blue-500 ring-2 ring-blue-300" : "border-gray-300"
           }
         >
           Select Today ({format(new Date(Date.now())).split(" ")[0]})
         </Button>
-
         <Button
           onClick={useTomorrow}
           variant="outline"
           className={
-            selectedDate === "tomorrow"
-              ? "border-blue-500 ring-2 ring-blue-300"
-              : "border-gray-300"
+            selectedDate === "tomorrow" ? "border-blue-500 ring-2 ring-blue-300" : "border-gray-300"
           }
         >
           Select Tomorrow ({format(new Date(Date.now() + 86400000)).split(" ")[0]})
