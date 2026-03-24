@@ -504,9 +504,33 @@ export default function CurtailmentPlanner() {
   const downloadCSV = () => {
     const blob = new Blob([output], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
+
+    const dd = pad(baseDate.getDate());
+    const mm = pad(baseDate.getMonth() + 1);
+    const yyyy = baseDate.getFullYear();
+    const dateStr = `${dd}${mm}${yyyy}`;
+
+    // Detect cluster/plant name from output
+    let name = "curtailment";
+    const outputUpper = output.toUpperCase();
+    if (outputUpper.includes("NON-PV-RIO MAIOR") || outputUpper.includes("NON-PV-TORRE BELA"))
+      name = "NEOEN";
+    else if (outputUpper.includes("NON-FORAL"))
+      name = "FORAL";
+    else if (outputUpper.includes("OPDE"))
+      name = "OPDE";
+    else if (outputUpper.includes("PV-ALBERCAS") || outputUpper.includes("PV-VIÇOSO") || outputUpper.includes("PV-PEREIRO") || outputUpper.includes("GBT-PV-TRINDADE"))
+      name = "Alcoutim";
+    else if (outputUpper.includes("PV-AURIGA") || outputUpper.includes("PV-BELINCHON") || outputUpper.includes("PV-CEPHEUS") || outputUpper.includes("PV-MEDINA"))
+      name = "Solaria";
+    else if (outputUpper.includes("SDX-PV-DOURO"))
+      name = "Douro";
+    else if (outputUpper.includes("WF-VALE GRANDE"))
+      name = "Valegrande";
+
     const a = document.createElement("a");
     a.href = url;
-    a.download = "curtailment.csv";
+    a.download = `${name}_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

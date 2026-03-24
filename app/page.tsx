@@ -356,8 +356,8 @@ export default function SolarEnergyWebApp() {
         <Button asChild variant="secondary">
           <Link href="/curtailment">Curtailment Planner</Link>
         </Button>
-        <Button className="btn-glow">
-          <Link href="/secondary">Secondary Active Power Calc ✨</Link>
+        <Button>
+          <Link href="/secondary">Secondary Active Power Calc </Link>
         </Button>
 
       </div>
