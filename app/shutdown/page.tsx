@@ -75,7 +75,6 @@ const TIERS: { label: string; delayMinutes: number; color: string; plants: strin
 ];
 
 const ALL_PLANTS = TIERS.flatMap((t) => t.plants);
-
 // ─── SUPPLIERS (Fornecedor → plants mapping) ─────────────────────────────
 const SUPPLIERS: Record<string, string[]> = {
   ISOTROL: [
