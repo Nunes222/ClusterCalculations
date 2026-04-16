@@ -4,55 +4,238 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/BackButton";
 
-// All known plants
-const ALL_PLANTS = [
-  "WF-VALE GRANDE",
-  "PV-PEREA",
-  "PV-EL VEGON",
-  "PV-ESCATRON",
-  "PV-ENVITERO",
-  "PV-LOGRO",
-  "PV-ALBERCAS",
-  "PV-ICTIO ALBARREAL",
-  "PV-SÃOMARCOS",
-  "PV-VIÇOSO",
-  "PV-PEREIRO",
-  "PV-PEREIRO2",
-  "PV-VALDECARRO",
-  "PV-ALCAZAR I",
-  "PV-ALCAZAR II",
-  "PV-VALDIVIESO",
+// ─── DELAY TIERS ─────────────────────────────────────────────────────────────
+const TIERS: { label: string; delayMinutes: number; color: string; plants: string[] }[] = [
+  {
+    label: "0–15 min",
+    delayMinutes: 0,
+    color: "border-red-500 bg-red-50 dark:bg-red-950/20",
+    plants: [
+      "PV-VIÇOSO",
+      "WF-VALE GRANDE",
+      "PV-SÃOMARCOS",
+      "PV-PEREIRO",
+      "PV-ALBERCAS",
+      "PV-LOGRO",
+      "PV-RIBAGRANDE",
+      "PV-SIERREZUELA",
+      "PV-VALDELAGUA",
+      "PV-ROBLEDO",
+      "PV-ESPLENDOR",
+      "PV-PALABRA",
+      "PV-HAZAÑA",
+      "PV-TALENTO",
+    ],
+  },
+  {
+    label: "15–30 min",
+    delayMinutes: 15,
+    color: "border-orange-500 bg-orange-50 dark:bg-orange-950/20",
+    plants: [
+      "PV-EMOCION",
+      "PV-ESCATRON",
+      "PV-ENVITERO",
+      "PV-ESCARNES",
+      "PV-IGNIS",
+      "PV-MEDIOMONTE",
+      "PV-MOCATERO",
+      "PV-VALDECARRO",
+      "PV-VALDIVIESO",
+      "PV-ALCAZAR II",
+      "PV-ALCAZAR I",
+    ],
+  },
+  {
+    label: "30–45 min",
+    delayMinutes: 30,
+    color: "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20",
+    plants: [
+      "PV-ICTIO ALCAZAR 1",
+      "PV-ICTIO ALCAZAR 2",
+      "PV-ICTIO ALCAZAR 3",
+      "PV-ICTIO ALBARREAL",
+      "PV-MANZANARES",
+      "PV-PEREA",
+      "PV-EL VEGON",
+    ],
+  },
+  {
+    label: "45–60 min",
+    delayMinutes: 45,
+    color: "border-green-500 bg-green-50 dark:bg-green-950/20",
+    plants: [
+      "PV-PITARCO1",
+      "PV-PITARCO3",
+      "PV-PITARCO2",
+      "PV-ALMARAZ",
+      "PV-AHÍN",
+      "PV-TOLEDO",
+    ],
+  },
 ];
 
-// Grouped for display
-const GROUPS: Record<string, string[]> = {
-  Isotrol: [
-    "PV-ALBERCAS",
-    "PV-SÃOMARCOS",
-    "PV-VIÇOSO",
-    "PV-PEREIRO",
-    "PV-PEREIRO2",
+const ALL_PLANTS = TIERS.flatMap((t) => t.plants);
+
+// ─── SUPPLIERS (Fornecedor → plants mapping) ─────────────────────────────
+const SUPPLIERS: Record<string, string[]> = {
+  ISOTROL: [
+    "PV-VIÇOSO","WF-VALE GRANDE","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
+    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
+    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
+    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
+    "PV-ICTIO ALBARREAL","PV-MANZANARES","PV-PEREA","PV-EL VEGON",
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2","PV-ALMARAZ"
   ],
 
-  Other: [
+  GALP: [
+    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
+    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
+    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
+    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
+    "PV-ICTIO ALBARREAL","PV-MANZANARES","PV-PEREA","PV-EL VEGON",
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+  ],
+
+  "POWER ELECTRONICS": [
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
+    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
+    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
+    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
+    "PV-ICTIO ALBARREAL","PV-MANZANARES"
+  ],
+
+  SECOEX: [
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
+    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
+    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
+    "PV-ICTIO ALBARREAL","PV-PEREA","PV-EL VEGON",
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+  ],
+
+  ASON: [
+    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
+    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
+    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"
+  ],
+
+  SUNGROW: [
+    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-PEREA","PV-EL VEGON",
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2","PV-ALMARAZ"
+  ],
+
+  "ARAGON SOLAR": [
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
+    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
+    "PV-MOCATERO"
+  ],
+
+  IGNIS: [
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
+    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
+    "PV-MOCATERO"
+  ],
+
+  P4Q: [
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO",
+    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"
+  ],
+
+  SOLTEC: [
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
+    "PV-ICTIO ALBARREAL","PV-MANZANARES"
+  ],
+
+  NEXTRACKER: [
+    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
+    "PV-PEREA","PV-EL VEGON"
+  ],
+
+  TRINA: [
     "WF-VALE GRANDE",
-    "PV-PEREA",
-    "PV-EL VEGON",
-    "PV-ESCATRON",
-    "PV-ENVITERO",
-    "PV-LOGRO",
-    "PV-ICTIO ALBARREAL",
-    "PV-VALDECARRO",
-    "PV-ALCAZAR I",
-    "PV-ALCAZAR II",
-    "PV-VALDIVIESO",
+    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I","PV-ALMARAZ"
+  ],
+
+  COBRA: [
+    "PV-ICTIO ALBARREAL","PV-PEREA","PV-EL VEGON"
+  ],
+
+  EOSOL: [
+    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3","PV-MANZANARES"
+  ],
+
+  PVH: [
+    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO",
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+  ],
+
+  "COLWAY (IAZ)": [
+    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3","PV-MANZANARES"
+  ],
+
+  EFACEC: [
+    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
+  ],
+
+  VEOLIA: [
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+  ],
+
+  MEGAOM: [
+    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
+  ],
+
+  GPM: [
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+  ],
+
+  "HITACHI ENERGY": [
+    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
+  ],
+
+  SOLARIG: [
+    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"
+  ],
+
+  WHS: [
+    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
+  ],
+
+  ELECNOR: [
+    "PV-ICTIO ALBARREAL"
   ],
 };
 
-const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+// ─── NAME MAPPING ─────────────────────────────────────────────────────────────
+// Maps display names (used in UI/tiers) → exact system names (written to CSV).
+// Only entries that differ need to be listed here.
+const SYSTEM_NAME: Record<string, string> = {
+  "PV-ALCAZAR I":  "PV-ALCAZAR1",
+  "PV-ALCAZAR II": "PV-ALCAZAR2",
+  "PV-AHIN":       "PV-AHÍN",
+};
+const toSystemName = (plant: string): string => SYSTEM_NAME[plant] ?? plant;
+// ──────────────────────────────────────────────────────────────────────────────
 
+const pad = (n: number) => (n < 10 ? "0" + n : String(n));
 const formatDate = (d: Date) =>
   `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const addMinutes = (d: Date, mins: number): Date => {
+  const copy = new Date(d);
+  copy.setMinutes(copy.getMinutes() + mins);
+  return copy;
+};
 
 export default function ShutdownCSV() {
   const [selectedDate, setSelectedDate] = useState<"today" | "tomorrow">("today");
@@ -62,11 +245,18 @@ export default function ShutdownCSV() {
     return d;
   });
   const [shutdownHour, setShutdownHour] = useState("12:00");
-  const [endHour, setEndHour] = useState("23:45");
   const [selected, setSelected] = useState<Record<string, boolean>>(
     Object.fromEntries(ALL_PLANTS.map((p) => [p, true]))
   );
   const [output, setOutput] = useState("");
+  const [selectedSupplier, setSelectedSupplier] = useState<string>("");
+
+  const getEndDate = (): Date => {
+    const end = new Date(baseDate);
+    end.setDate(end.getDate() + 1);
+    end.setHours(23, 59, 0, 0);
+    return end;
+  };
 
   const useToday = () => {
     const d = new Date();
@@ -83,8 +273,7 @@ export default function ShutdownCSV() {
     setSelectedDate("tomorrow");
   };
 
-  const toggleGroup = (group: string) => {
-    const plants = GROUPS[group];
+  const toggleTier = (plants: string[]) => {
     const allOn = plants.every((p) => selected[p]);
     setSelected((prev) => {
       const next = { ...prev };
@@ -97,34 +286,53 @@ export default function ShutdownCSV() {
     const allOn = ALL_PLANTS.every((p) => selected[p]);
     setSelected(Object.fromEntries(ALL_PLANTS.map((p) => [p, !allOn])));
   };
+  const applySupplier = (supplier: string) => {
+    setSelectedSupplier(supplier);
+
+    if (!supplier) return;
+
+    const plants = SUPPLIERS[supplier];
+
+    setSelected((prev) => {
+      const next = { ...prev };
+
+      // Reset all
+      ALL_PLANTS.forEach((p) => (next[p] = false));
+
+      // Activate supplier plants
+      plants.forEach((p) => {
+        if (next.hasOwnProperty(p)) {
+          next[p] = true;
+        }
+      });
+
+      return next;
+    });
+  };
 
   const generate = () => {
     const [sh, sm] = shutdownHour.split(":").map(Number);
-    const [eh, em] = endHour.split(":").map(Number);
-
-    const start = new Date(baseDate);
-    start.setHours(sh, sm, 0, 0);
-
-    const end = new Date(baseDate);
-    end.setHours(eh, em, 0, 0);
-
-    if (end <= start) {
-      setOutput("End time must be after start time.");
-      return;
-    }
-
-    const activePlants = ALL_PLANTS.filter((p) => selected[p]);
-    if (activePlants.length === 0) {
-      setOutput("No plants selected.");
-      return;
-    }
+    const shutdownStart = new Date(baseDate);
+    shutdownStart.setHours(sh, sm, 0, 0);
+    const end = getEndDate();
 
     const rows = [
       "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
     ];
 
-    for (const plant of activePlants) {
-      rows.push(`${plant};${formatDate(start)};${formatDate(end)};0.00`);
+    let count = 0;
+    for (const tier of TIERS) {
+      for (const plant of tier.plants) {
+        if (!selected[plant]) continue;
+        const plantStart = addMinutes(shutdownStart, tier.delayMinutes);
+        rows.push(`${toSystemName(plant)};${formatDate(plantStart)};${formatDate(end)};0.00`);
+        count++;
+      }
+    }
+
+    if (count === 0) {
+      setOutput("No plants selected.");
+      return;
     }
 
     setOutput(rows.join("\n"));
@@ -143,14 +351,19 @@ export default function ShutdownCSV() {
     URL.revokeObjectURL(url);
   };
 
+  const endDate = getEndDate();
+  const [sh, sm] = shutdownHour.split(":").map(Number);
+  const previewStart = new Date(baseDate);
+  previewStart.setHours(sh || 0, sm || 0, 0, 0);
+
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-6">
       <h1 className="text-xl font-bold">Shutdown CSV Generator</h1>
       <p className="text-sm text-gray-500">
-        Sets selected plants to 0 MW for a chosen time window.
+        Plants shut down in staggered tiers. End time is always next day at 23:59.
       </p>
 
-      {/* Date selection */}
+      {/* Date */}
       <div className="flex gap-2">
         <Button
           onClick={useToday}
@@ -168,8 +381,8 @@ export default function ShutdownCSV() {
         </Button>
       </div>
 
-      {/* Time range */}
-      <div className="flex gap-4 items-end">
+      {/* Time */}
+      <div className="flex gap-6 items-end flex-wrap">
         <div className="space-y-1">
           <label className="block text-sm font-medium">Shutdown from</label>
           <input
@@ -179,49 +392,76 @@ export default function ShutdownCSV() {
             className="border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-600"
           />
         </div>
-        <div className="space-y-1">
-          <label className="block text-sm font-medium">Until</label>
-          <input
-            type="time"
-            value={endHour}
-            onChange={(e) => setEndHour(e.target.value)}
-            className="border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-600"
-          />
+        <div className="space-y-1 text-sm">
+          <span className="block font-medium text-gray-700 dark:text-gray-300">Until (auto)</span>
+          <span className="block px-3 py-2 border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-600 text-gray-500">
+            {formatDate(endDate)}
+          </span>
         </div>
+      </div>
+
+      {/* Tier timing preview */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        {TIERS.map((tier) => (
+          <div key={tier.label} className={`rounded p-2 border ${tier.color}`}>
+            <div className="font-semibold">{tier.label}</div>
+            <div className="text-gray-600 dark:text-gray-400">
+              → {formatDate(addMinutes(previewStart, tier.delayMinutes)).split(" ")[1]}
+            </div>
+          </div>
+        ))}
+      </div>
+
+        {/* Supplier selection */}
+      <div className="space-y-1">
+        <label className="block text-sm font-medium">
+          Shutdown by Entidade / Fornecedor
+        </label>
+
+        <select
+          value={selectedSupplier}
+          onChange={(e) => applySupplier(e.target.value)}
+          className="border rounded px-3 py-2 text-sm w-full dark:bg-gray-800 dark:border-gray-600"
+        >
+          <option value="">-- Select supplier --</option>
+          {Object.keys(SUPPLIERS).map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Plant selection */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <label className="text-sm font-medium">Select plants to shut down</label>
-          <button
-            onClick={toggleAll}
-            className="text-xs text-blue-500 underline"
-          >
+          <button onClick={toggleAll} className="text-xs text-blue-500 underline">
             {ALL_PLANTS.every((p) => selected[p]) ? "Deselect all" : "Select all"}
           </button>
         </div>
 
-        {Object.entries(GROUPS).map(([group, plants]) => (
-          <div key={group} className="border rounded-lg p-3 space-y-2">
+        {TIERS.map((tier) => (
+          <div key={tier.label} className={`border rounded-lg p-3 space-y-2 ${tier.color}`}>
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-sm">{group}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm">{tier.label}</span>
+                <span className="text-xs text-gray-500">+{tier.delayMinutes} min</span>
+              </div>
               <button
-                onClick={() => toggleGroup(group)}
+                onClick={() => toggleTier(tier.plants)}
                 className="text-xs text-blue-500 underline"
               >
-                {plants.every((p) => selected[p]) ? "Deselect" : "Select"} all
+                {tier.plants.every((p) => selected[p]) ? "Deselect" : "Select"} all
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-              {plants.map((plant) => (
+              {tier.plants.map((plant) => (
                 <label key={plant} className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="checkbox"
                     checked={selected[plant] ?? false}
-                    onChange={() =>
-                      setSelected((prev) => ({ ...prev, [plant]: !prev[plant] }))
-                    }
+                    onChange={() => setSelected((prev) => ({ ...prev, [plant]: !prev[plant] }))}
                   />
                   <span className="truncate">{plant}</span>
                 </label>
@@ -234,12 +474,11 @@ export default function ShutdownCSV() {
       {/* Actions */}
       <div className="flex gap-2">
         <Button onClick={generate}>Generate CSV</Button>
-        {output && !output.includes("time") && output.includes(";") && (
+        {output && output.includes(";") && (
           <Button onClick={download}>Download CSV</Button>
         )}
       </div>
 
-      {/* Preview */}
       {output && (
         <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded">
           <pre className="whitespace-pre-wrap text-sm">{output}</pre>
