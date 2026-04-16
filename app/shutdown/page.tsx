@@ -243,7 +243,8 @@ export default function ShutdownCSV() {
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  const [shutdownHour, setShutdownHour] = useState("12:00");
+  const [hour, setHour] = useState("12");
+  const [minute, setMinute] = useState("00");
   const [selected, setSelected] = useState<Record<string, boolean>>(
     Object.fromEntries(ALL_PLANTS.map((p) => [p, true]))
   );
@@ -310,7 +311,8 @@ export default function ShutdownCSV() {
   };
 
   const generate = () => {
-    const [sh, sm] = shutdownHour.split(":").map(Number);
+    const sh = Number(hour);
+    const sm = Number(minute);
     const shutdownStart = new Date(baseDate);
     shutdownStart.setHours(sh, sm, 0, 0);
     const end = getEndDate();
@@ -351,7 +353,8 @@ export default function ShutdownCSV() {
   };
 
   const endDate = getEndDate();
-  const [sh, sm] = shutdownHour.split(":").map(Number);
+  const sh = Number(hour);
+  const sm = Number(minute);
   const previewStart = new Date(baseDate);
   previewStart.setHours(sh || 0, sm || 0, 0, 0);
 
@@ -384,12 +387,25 @@ export default function ShutdownCSV() {
       <div className="flex gap-6 items-end flex-wrap">
         <div className="space-y-1">
           <label className="block text-sm font-medium">Shutdown from</label>
-          <input
-            type="time"
-            value={shutdownHour}
-            onChange={(e) => setShutdownHour(e.target.value)}
-            className="border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-600"
-          />
+          <div className="flex gap-2 items-center">
+            <input
+              type="number"
+              min="0"
+              max="23"
+              value={hour}
+              onChange={(e) => setHour(e.target.value.padStart(2, "0"))}
+              className="w-16 border rounded px-2 py-2 text-sm dark:bg-gray-800"
+            />
+            :
+            <input
+              type="number"
+              min="0"
+              max="59"
+              value={minute}
+              onChange={(e) => setMinute(e.target.value.padStart(2, "0"))}
+              className="w-16 border rounded px-2 py-2 text-sm dark:bg-gray-800"
+            />
+          </div>
         </div>
         <div className="space-y-1 text-sm">
           <span className="block font-medium text-gray-700 dark:text-gray-300">Until (auto)</span>
