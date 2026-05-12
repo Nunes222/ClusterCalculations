@@ -4,14 +4,67 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/BackButton";
 
-// ─── DELAY TIERS ─────────────────────────────────────────────────────────────
-const TIERS: { label: string; delayMinutes: number; color: string; plants: string[] }[] = [
+// ─── BATCH CONFIG ─────────────────────────────────────────────────────────────
+const BATCH_SIZE = 10;
+const BATCH_INTERVAL_MINUTES = 10; // minutes between waves
+// ─── RAMP CONFIG ──────────────────────────────────────────────────────────────
+// Each plant ramps from nominal → 0 over RAMP_STEPS minutes (1 step per minute)
+// Step i (0-based): power = nominal * (1 - (i+1)/RAMP_STEPS)
+// Last step is always exactly 0.
+const RAMP_STEPS = 10; // total minutes to reach 0
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ─── NOMINAL POWER (MW) per plant (display name) ──────────────────────────────
+const NOMINAL: Record<string, number> = {
+  "WF-VALE GRANDE":      12,
+  "PV-SÃOMARCOS":        49,
+  "PV-VIÇOSO":           43,
+  "VICOSO BESS":          5,
+  "PV-PEREIRO":          31,
+  "PV-ALBERCAS":         28,
+  "PV-LOGRO":            50,
+  "PV-RIBAGRANDE":       50,
+  "PV-SIERREZUELA":      50,
+  "PV-VALDELAGUA":       50,
+  "PV-ROBLEDO":          50,
+  "PV-ESPLENDOR":        50,
+  "PV-PALABRA":          50,
+  "PV-HAZAÑA":           50,
+  "PV-TALENTO":          50,
+  "PV-EMOCION":          50,
+  "PV-ESCATRON":         50,
+  "PV-ENVITERO":         46,
+  "PV-ESCARNES":         40,
+  "PV-IGNIS":            50,
+  "PV-MEDIOMONTE":       50,
+  "PV-MOCATERO":         40,
+  "PV-VALDECARRO":       50,
+  "PV-VALDIVIESO":       50,
+  "PV-ALCAZAR II":       45,  // maps to PV-ALCAZAR2
+  "PV-ALCAZAR I":        45,  // maps to PV-ALCAZAR1
+  "PV-ICTIO ALCAZAR 1":  50,
+  "PV-ICTIO ALCAZAR 2":  50,
+  "PV-ICTIO ALCAZAR 3":  50,
+  "PV-ICTIO ALBARREAL":  50,
+  "PV-MANZANARES":       36,
+  "PV-PEREA":            50,
+  "PV-EL VEGON":         50,
+  "PV-PITARCO1":         40,
+  "PV-PITARCO3":         12,
+  "PV-PITARCO2":         10,
+  "PV-TOLEDO":           32.5, // Toledo & Ahin split: 65/2
+  "PV-AHÍN":             32.5,
+  "PV-ALMARAZ":          50,
+};
+
+// ─── TIERS (visual grouping only — rank = order in ALL_PLANTS) ────────────────
+const TIERS: { label: string; color: string; plants: string[] }[] = [
   {
-    label: "0–15 min",
-    delayMinutes: 0,
+    label: "Group A",
     color: "border-red-500 bg-red-50 dark:bg-red-950/20",
     plants: [
       "PV-VIÇOSO",
+      "VICOSO BESS",
       "WF-VALE GRANDE",
       "PV-SÃOMARCOS",
       "PV-PEREIRO",
@@ -28,8 +81,7 @@ const TIERS: { label: string; delayMinutes: number; color: string; plants: strin
     ],
   },
   {
-    label: "15–30 min",
-    delayMinutes: 15,
+    label: "Group B",
     color: "border-orange-500 bg-orange-50 dark:bg-orange-950/20",
     plants: [
       "PV-EMOCION",
@@ -46,8 +98,7 @@ const TIERS: { label: string; delayMinutes: number; color: string; plants: strin
     ],
   },
   {
-    label: "30–45 min",
-    delayMinutes: 30,
+    label: "Group C",
     color: "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20",
     plants: [
       "PV-ICTIO ALCAZAR 1",
@@ -60,8 +111,7 @@ const TIERS: { label: string; delayMinutes: number; color: string; plants: strin
     ],
   },
   {
-    label: "45–60 min",
-    delayMinutes: 45,
+    label: "Group D",
     color: "border-green-500 bg-green-50 dark:bg-green-950/20",
     plants: [
       "PV-PITARCO1",
@@ -75,200 +125,117 @@ const TIERS: { label: string; delayMinutes: number; color: string; plants: strin
 ];
 
 const ALL_PLANTS = TIERS.flatMap((t) => t.plants);
-// ─── SUPPLIERS (Fornecedor → plants mapping) ─────────────────────────────
+
+const PLANT_RANK: Record<string, number> = Object.fromEntries(
+  ALL_PLANTS.map((p, i) => [p, i + 1])
+);
+
+// ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 const SUPPLIERS: Record<string, string[]> = {
-  "ALL - complete shutdown": [
-      "PV-VIÇOSO",
-      "WF-VALE GRANDE",
-      "PV-SÃOMARCOS",
-      "PV-PEREIRO",
-      "PV-ALBERCAS",
-      "PV-LOGRO",
-      "PV-RIBAGRANDE",
-      "PV-SIERREZUELA",
-      "PV-VALDELAGUA",
-      "PV-ROBLEDO",
-      "PV-ESPLENDOR",
-      "PV-PALABRA",
-      "PV-HAZAÑA",
-      "PV-TALENTO",
-      "PV-EMOCION",
-      "PV-ESCATRON",
-      "PV-ENVITERO",
-      "PV-ESCARNES",
-      "PV-IGNIS",
-      "PV-MEDIOMONTE",
-      "PV-MOCATERO",
-      "PV-VALDECARRO",
-      "PV-VALDIVIESO",
-      "PV-ALCAZAR II",
-      "PV-ALCAZAR I",
-      "PV-ICTIO ALCAZAR 1",
-      "PV-ICTIO ALCAZAR 2",
-      "PV-ICTIO ALCAZAR 3",
-      "PV-ICTIO ALBARREAL",
-      "PV-MANZANARES",
-      "PV-PEREA",
-      "PV-EL VEGON",
-      "PV-PITARCO1",
-      "PV-PITARCO3",
-      "PV-PITARCO2",
-      "PV-ALMARAZ",
-      "PV-AHÍN",
-      "PV-TOLEDO",
-
-
-  ],
+  "ALL - complete shutdown": ALL_PLANTS,
   ISOTROL: [
-    "PV-VIÇOSO","WF-VALE GRANDE","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-VIÇOSO","VICOSO BESS","WF-VALE GRANDE","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
     "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
     "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
     "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
     "PV-ICTIO ALBARREAL","PV-MANZANARES","PV-PEREA","PV-EL VEGON",
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2","PV-ALMARAZ"
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2","PV-ALMARAZ",
   ],
-
   GALP: [
-    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
     "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
     "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
     "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
     "PV-ICTIO ALBARREAL","PV-MANZANARES","PV-PEREA","PV-EL VEGON",
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2",
   ],
-
   "POWER ELECTRONICS": [
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
     "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
     "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
     "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
-    "PV-ICTIO ALBARREAL","PV-MANZANARES"
+    "PV-ICTIO ALBARREAL","PV-MANZANARES",
   ],
-
   SECOEX: [
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
     "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
     "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
     "PV-ICTIO ALBARREAL","PV-PEREA","PV-EL VEGON",
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2",
   ],
-
   ASON: [
-    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
     "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
-    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"
+    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
   ],
-
   SUNGROW: [
-    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
+    "PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
     "PV-PEREA","PV-EL VEGON",
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2","PV-ALMARAZ"
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2","PV-ALMARAZ",
   ],
-
   "ARAGON SOLAR": [
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
     "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
-    "PV-MOCATERO"
+    "PV-MOCATERO",
   ],
-
   IGNIS: [
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
     "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
-    "PV-MOCATERO"
+    "PV-MOCATERO",
   ],
-
   P4Q: [
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO",
-    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"
+    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
   ],
-
   SOLTEC: [
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
-    "PV-ICTIO ALBARREAL","PV-MANZANARES"
+    "PV-ICTIO ALBARREAL","PV-MANZANARES",
   ],
-
   NEXTRACKER: [
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
-    "PV-PEREA","PV-EL VEGON"
+    "PV-PEREA","PV-EL VEGON",
   ],
-
   TRINA: [
     "WF-VALE GRANDE",
-    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I","PV-ALMARAZ"
+    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I","PV-ALMARAZ",
   ],
-
-  COBRA: [
-    "PV-ICTIO ALBARREAL","PV-PEREA","PV-EL VEGON"
-  ],
-
-  EOSOL: [
-    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3","PV-MANZANARES"
-  ],
-
+  COBRA: ["PV-ICTIO ALBARREAL","PV-PEREA","PV-EL VEGON"],
+  EOSOL: ["PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3","PV-MANZANARES"],
   PVH: [
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO",
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
+    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2",
   ],
-
-  "COLWAY (IAZ)": [
-    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3","PV-MANZANARES"
-  ],
-
-  EFACEC: [
-    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
-  ],
-
-  VEOLIA: [
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
-  ],
-
-  MEGAOM: [
-    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
-  ],
-
-  GPM: [
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"
-  ],
-
-  "HITACHI ENERGY": [
-    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
-  ],
-
-  SOLARIG: [
-    "PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"
-  ],
-
-  WHS: [
-    "PV-VIÇOSO","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"
-  ],
-
-  ELECNOR: [
-    "PV-ICTIO ALBARREAL"
-  ],
+  "COLWAY (IAZ)": ["PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3","PV-MANZANARES"],
+  EFACEC: ["PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"],
+  VEOLIA: ["PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"],
+  MEGAOM: ["PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"],
+  GPM: ["PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"],
+  "HITACHI ENERGY": ["PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"],
+  SOLARIG: ["PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"],
+  WHS: ["PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"],
+  ELECNOR: ["PV-ICTIO ALBARREAL"],
 };
 
 // ─── NAME MAPPING ─────────────────────────────────────────────────────────────
-// Maps display names (used in UI/tiers) → exact system names (written to CSV).
-// Only entries that differ need to be listed here.
 const SYSTEM_NAME: Record<string, string> = {
   "PV-ALCAZAR I":  "PV-ALCAZAR1",
   "PV-ALCAZAR II": "PV-ALCAZAR2",
   "PV-AHIN":       "PV-AHÍN",
 };
 const toSystemName = (plant: string): string => SYSTEM_NAME[plant] ?? plant;
-// ──────────────────────────────────────────────────────────────────────────────
 
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 const pad = (n: number) => (n < 10 ? "0" + n : String(n));
 const formatDate = (d: Date) =>
   `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -278,6 +245,70 @@ const addMinutes = (d: Date, mins: number): Date => {
   return copy;
 };
 
+// Generate ramp rows for one plant starting at waveStart.
+// Produces RAMP_STEPS rows, each 1 minute wide:
+//   step 0: nominal * 0.9  (T+0 → T+1)
+//   step 1: nominal * 0.8  (T+1 → T+2)
+//   ...
+//   step 9: 0.00           (T+9 → T+10)
+// After T+10 the plant stays at 0 until endDate (one final row).
+const buildRamp = (
+  systemName: string,
+  nominal: number,
+  waveStart: Date,
+  endDate: Date
+): string[] => {
+  const rows: string[] = [];
+
+  for (let step = 0; step < RAMP_STEPS; step++) {
+    const stepStart = addMinutes(waveStart, step);
+    const stepEnd   = addMinutes(waveStart, step + 1);
+    const factor    = 1 - (step + 1) / RAMP_STEPS; // 0.9, 0.8, ... 0.0
+    const power     = nominal * factor;
+    rows.push(`${systemName};${formatDate(stepStart)};${formatDate(stepEnd)};${power.toFixed(2)}`);
+  }
+
+  // Final row: hold at 0 from end of ramp until endDate
+  const rampEnd = addMinutes(waveStart, RAMP_STEPS);
+  if (rampEnd < endDate) {
+    rows.push(`${systemName};${formatDate(rampEnd)};${formatDate(endDate)};0.00`);
+  }
+
+  return rows;
+};
+
+// Reverse ramp: 0 → nominal (activation)
+const buildRampUp = (
+  systemName: string,
+  nominal: number,
+  waveStart: Date,
+  endDate: Date
+): string[] => {
+  const rows: string[] = [];
+
+  // Ramp up from 0 → nominal
+  for (let step = 0; step < RAMP_STEPS; step++) {
+    const stepStart = addMinutes(waveStart, step);
+    const stepEnd   = addMinutes(waveStart, step + 1);
+    const factor    = (step + 1) / RAMP_STEPS; // 0.1 → 1.0
+    const power     = nominal * factor;
+
+    rows.push(
+      `${systemName};${formatDate(stepStart)};${formatDate(stepEnd)};${power.toFixed(2)}`
+    );
+  }
+
+  // After ramp: hold nominal until end
+  const rampEnd = addMinutes(waveStart, RAMP_STEPS);
+  if (rampEnd < endDate) {
+    rows.push(
+      `${systemName};${formatDate(rampEnd)};${formatDate(endDate)};${nominal.toFixed(2)}`
+    );
+  }
+
+  return rows;
+};
+
 export default function ShutdownCSV() {
   const [selectedDate, setSelectedDate] = useState<"today" | "tomorrow">("today");
   const [baseDate, setBaseDate] = useState(() => {
@@ -285,13 +316,13 @@ export default function ShutdownCSV() {
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  const [hour, setHour] = useState("12");
+  const [hour, setHour]     = useState("12");
   const [minute, setMinute] = useState("00");
   const [selected, setSelected] = useState<Record<string, boolean>>(
     Object.fromEntries(ALL_PLANTS.map((p) => [p, true]))
   );
   const [output, setOutput] = useState("");
-  const [selectedSupplier, setSelectedSupplier] = useState<string>("");
+  const [selectedSuppliers, setSelectedSuppliers] = useState<Set<string>>(new Set());
 
   const getEndDate = (): Date => {
     const end = new Date(baseDate);
@@ -328,29 +359,46 @@ export default function ShutdownCSV() {
     const allOn = ALL_PLANTS.every((p) => selected[p]);
     setSelected(Object.fromEntries(ALL_PLANTS.map((p) => [p, !allOn])));
   };
-  const applySupplier = (supplier: string) => {
-    setSelectedSupplier(supplier);
 
-    if (!supplier) return;
+  const toggleSupplier = (supplier: string) => {
+    setSelectedSuppliers((prev) => {
+      const next = new Set(prev);
+      const plants = SUPPLIERS[supplier] || [];
 
-    const plants = SUPPLIERS[supplier];
+      const isActive = next.has(supplier);
 
-    setSelected((prev) => {
-      const next = { ...prev };
+      if (isActive) {
+        // ❌ REMOVE supplier → deselect ONLY its plants
+        next.delete(supplier);
 
-      // Reset all
-      ALL_PLANTS.forEach((p) => (next[p] = false));
+        setSelected((prevSelected) => {
+          const updated = { ...prevSelected };
+          plants.forEach((p) => {
+            updated[p] = false;
+          });
+          return updated;
+        });
 
-      // Activate supplier plants
-      plants.forEach((p) => {
-        if (next.hasOwnProperty(p)) {
-          next[p] = true;
-        }
-      });
+      } else {
+        // ✅ ADD supplier → select its plants (without touching others)
+        next.add(supplier);
+
+        setSelected((prevSelected) => {
+          const updated = { ...prevSelected };
+          plants.forEach((p) => {
+            updated[p] = true;
+          });
+          return updated;
+        });
+      }
 
       return next;
     });
   };
+
+  // Selected plants sorted by global rank
+  const selectedByRank = ALL_PLANTS.filter((p) => selected[p]);
+  const numWaves = Math.ceil(selectedByRank.length / BATCH_SIZE) || 1;
 
   const generate = () => {
     const sh = Number(hour);
@@ -359,52 +407,86 @@ export default function ShutdownCSV() {
     shutdownStart.setHours(sh, sm, 0, 0);
     const end = getEndDate();
 
+    if (selectedByRank.length === 0) {
+      setOutput("No plants selected.");
+      return;
+    }
+
     const rows = [
       "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
     ];
 
-    let count = 0;
-    for (const tier of TIERS) {
-      for (const plant of tier.plants) {
-        if (!selected[plant]) continue;
-        const plantStart = addMinutes(shutdownStart, tier.delayMinutes);
-        rows.push(`${toSystemName(plant)};${formatDate(plantStart)};${formatDate(end)};0.00`);
-        count++;
-      }
-    }
+    selectedByRank.forEach((plant, idx) => {
+      const wave       = Math.floor(idx / BATCH_SIZE);
+      const waveDelay  = wave * BATCH_INTERVAL_MINUTES;
+      const waveStart  = addMinutes(shutdownStart, waveDelay);
+      const nominal    = NOMINAL[plant] ?? 50; // fallback 50 MW if missing
+      const sysName    = toSystemName(plant);
+      const rampRows   = buildRamp(sysName, nominal, waveStart, end);
+      rows.push(...rampRows);
+    });
 
-    if (count === 0) {
+    setOutput(rows.join("\n"));
+  };
+  const generateActivation = () => {
+    const sh = Number(hour);
+    const sm = Number(minute);
+
+    const activationStart = new Date(baseDate);
+    activationStart.setHours(sh, sm, 0, 0);
+
+    const end = getEndDate();
+
+    if (selectedByRank.length === 0) {
       setOutput("No plants selected.");
       return;
     }
+
+    const rows = [
+      "site;startsAt (yyyy/mm/dd hh:mm);endAt (yyyy/mm/dd hh:mm);power (mw)",
+    ];
+
+    // 🔥 IMPORTANT: reverse order
+    const reversed = [...selectedByRank].reverse();
+
+    reversed.forEach((plant, idx) => {
+      const wave       = Math.floor(idx / BATCH_SIZE);
+      const waveDelay  = wave * BATCH_INTERVAL_MINUTES;
+      const waveStart  = addMinutes(activationStart, waveDelay);
+
+      const nominal  = NOMINAL[plant] ?? 50;
+      const sysName  = toSystemName(plant);
+
+      const rampRows = buildRampUp(sysName, nominal, waveStart, end);
+      rows.push(...rampRows);
+    });
 
     setOutput(rows.join("\n"));
   };
 
   const download = () => {
     const blob = new Blob([output], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const dd = pad(baseDate.getDate());
-    const mm = pad(baseDate.getMonth() + 1);
+    const url  = URL.createObjectURL(blob);
+    const dd   = pad(baseDate.getDate());
+    const mm   = pad(baseDate.getMonth() + 1);
     const yyyy = baseDate.getFullYear();
-    const a = document.createElement("a");
-    a.href = url;
+    const a    = document.createElement("a");
+    a.href     = url;
     a.download = `SHUTDOWN_${dd}${mm}${yyyy}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const endDate = getEndDate();
-  const sh = Number(hour);
-  const sm = Number(minute);
   const previewStart = new Date(baseDate);
-  previewStart.setHours(sh || 0, sm || 0, 0, 0);
+  previewStart.setHours(Number(hour) || 0, Number(minute) || 0, 0, 0);
+  const endDate = getEndDate();
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-6">
       <h1 className="text-xl font-bold">Shutdown CSV Generator</h1>
       <p className="text-sm text-gray-500">
-        Plants shut down in staggered tiers. End time is always next day at 23:59.
+        Selected plants ramp from nominal → 0 over {RAMP_STEPS} min, in waves of {BATCH_SIZE} every {BATCH_INTERVAL_MINUTES} min.
+        End time is always next day at 23:59.
       </p>
 
       {/* Date */}
@@ -431,19 +513,13 @@ export default function ShutdownCSV() {
           <label className="block text-sm font-medium">Shutdown from</label>
           <div className="flex gap-2 items-center">
             <input
-              type="number"
-              min="0"
-              max="23"
-              value={hour}
+              type="number" min="0" max="23" value={hour}
               onChange={(e) => setHour(e.target.value.padStart(2, "0"))}
               className="w-16 border rounded px-2 py-2 text-sm dark:bg-gray-800"
             />
             :
             <input
-              type="number"
-              min="0"
-              max="59"
-              value={minute}
+              type="number" min="0" max="59" value={minute}
               onChange={(e) => setMinute(e.target.value.padStart(2, "0"))}
               className="w-16 border rounded px-2 py-2 text-sm dark:bg-gray-800"
             />
@@ -457,37 +533,53 @@ export default function ShutdownCSV() {
         </div>
       </div>
 
-      {/* Tier timing preview */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-        {TIERS.map((tier) => (
-          <div key={tier.label} className={`rounded p-2 border ${tier.color}`}>
-            <div className="font-semibold">{tier.label}</div>
-            <div className="text-gray-600 dark:text-gray-400">
-              → {formatDate(addMinutes(previewStart, tier.delayMinutes)).split(" ")[1]}
-            </div>
-          </div>
-        ))}
-      </div>
-
-        {/* Supplier selection */}
+      {/* Wave preview */}
       <div className="space-y-1">
-        <label className="block text-sm font-medium">
-          Shutdown by Entidade / Fornecedor
-        </label>
-
-        <select
-          value={selectedSupplier}
-          onChange={(e) => applySupplier(e.target.value)}
-          className="border rounded px-3 py-2 text-sm w-full dark:bg-gray-800 dark:border-gray-600"
-        >
-          <option value="">-- Select supplier --</option>
-          {Object.keys(SUPPLIERS).map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <span className="text-sm font-medium">Wave schedule preview</span>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {Array.from({ length: numWaves }).map((_, i) => {
+            const waveStart   = addMinutes(previewStart, i * BATCH_INTERVAL_MINUTES);
+            const rampEndTime = addMinutes(waveStart, RAMP_STEPS);
+            const from = i * BATCH_SIZE + 1;
+            const to   = Math.min((i + 1) * BATCH_SIZE, selectedByRank.length);
+            return (
+              <div key={i} className="border rounded px-2 py-1 bg-gray-50 dark:bg-gray-800">
+                <span className="font-semibold">Wave {i + 1}</span>
+                <span className="text-gray-500 ml-1">
+                  #{from}–#{to} · ramp {formatDate(waveStart).split(" ")[1]} → {formatDate(rampEndTime).split(" ")[1]}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Supplier */}
+    <div className="space-y-2">
+      <label className="block text-sm font-medium">
+        Shutdown by Entidade / Fornecedor
+      </label>
+
+      <div className="flex flex-wrap gap-2">
+        {Object.keys(SUPPLIERS).map((supplier) => {
+          const active = selectedSuppliers.has(supplier);
+
+          return (
+            <button
+              key={supplier}
+              onClick={() => toggleSupplier(supplier)}
+              className={`px-3 py-1 text-xs rounded border transition
+                ${active
+                  ? "bg-blue-500 text-white border-blue-600"
+                  : "bg-gray-100 dark:bg-gray-800 border-gray-300"}
+              `}
+            >
+              {supplier}
+            </button>
+          );
+        })}
+      </div>
+</div>
 
       {/* Plant selection */}
       <div className="space-y-3">
@@ -501,36 +593,49 @@ export default function ShutdownCSV() {
         {TIERS.map((tier) => (
           <div key={tier.label} className={`border rounded-lg p-3 space-y-2 ${tier.color}`}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm">{tier.label}</span>
-                <span className="text-xs text-gray-500">+{tier.delayMinutes} min</span>
-              </div>
-              <button
-                onClick={() => toggleTier(tier.plants)}
-                className="text-xs text-blue-500 underline"
-              >
+              <span className="font-semibold text-sm">{tier.label}</span>
+              <button onClick={() => toggleTier(tier.plants)} className="text-xs text-blue-500 underline">
                 {tier.plants.every((p) => selected[p]) ? "Deselect" : "Select"} all
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-              {tier.plants.map((plant) => (
-                <label key={plant} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selected[plant] ?? false}
-                    onChange={() => setSelected((prev) => ({ ...prev, [plant]: !prev[plant] }))}
-                  />
-                  <span className="truncate">{plant}</span>
-                </label>
-              ))}
+              {tier.plants.map((plant) => {
+                const posInSelected = selectedByRank.indexOf(plant);
+                const wave = posInSelected >= 0 ? Math.floor(posInSelected / BATCH_SIZE) + 1 : null;
+                const nominal = NOMINAL[plant] ?? 50;
+                return (
+                  <label key={plant} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selected[plant] ?? false}
+                      onChange={() => setSelected((prev) => ({ ...prev, [plant]: !prev[plant] }))}
+                    />
+                    <span className="text-gray-400 dark:text-gray-500 font-mono text-xs w-5 shrink-0">
+                      #{PLANT_RANK[plant]}
+                    </span>
+                    <span className="truncate flex-1">{plant}</span>
+                    <span className="text-gray-400 text-xs shrink-0">{nominal} MW</span>
+                    {wave !== null && (
+                      <span className="text-xs font-medium text-blue-500 shrink-0">W{wave}</span>
+                    )}
+                  </label>
+                );
+              })}
             </div>
           </div>
         ))}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2">
-        <Button onClick={generate}>Generate CSV</Button>
+      <div className="flex gap-2 flex-wrap">
+        <Button onClick={generate}>
+          Generate Shutdown CSV
+        </Button>
+
+        <Button onClick={generateActivation} variant="secondary">
+          Generate Activation CSV
+        </Button>
+
         {output && output.includes(";") && (
           <Button onClick={download}>Download CSV</Button>
         )}

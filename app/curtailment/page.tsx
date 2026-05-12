@@ -459,6 +459,14 @@ export default function CurtailmentPlanner() {
         entries.push({ start, end, power });
       }
 
+      // Helper to round to 5/-5 only if close enough (within 0.5), otherwise use actual value
+      const smartRound = (value: number, target: number): number => {
+        if (Math.abs(Math.abs(value) - target) <= 0.5) {
+          return target * Math.sign(value);
+        }
+        return value;
+      };
+
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i];
         const prev = entries[i - 1];
@@ -474,7 +482,8 @@ export default function CurtailmentPlanner() {
           csvRows.push(`${site};${format(t1)};${format(t2)};${(0.6 * sign).toFixed(2)}`);
           csvRows.push(`${site};${format(t2)};${format(t3)};${(2.5 * sign).toFixed(2)}`);
           if (e.end > t3) {
-            csvRows.push(`${site};${format(t3)};${format(e.end)};${(5 * sign).toFixed(2)}`);
+            const finalPower = smartRound(e.power, 5);
+            csvRows.push(`${site};${format(t3)};${format(e.end)};${finalPower.toFixed(2)}`);
           }
           continue;
         }
@@ -486,7 +495,8 @@ export default function CurtailmentPlanner() {
         }
 
         if (e.power !== 0) {
-          csvRows.push(`${site};${format(e.start)};${format(e.end)};${(5 * Math.sign(e.power)).toFixed(2)}`);
+          const finalPower = smartRound(e.power, 5);
+          csvRows.push(`${site};${format(e.start)};${format(e.end)};${finalPower.toFixed(2)}`);
         }
       }
 
