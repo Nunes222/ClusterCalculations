@@ -5,56 +5,50 @@ import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/BackButton";
 
 // ─── BATCH CONFIG ─────────────────────────────────────────────────────────────
-const BATCH_SIZE = 10;
 const BATCH_INTERVAL_MINUTES = 10; // minutes between waves
-// ─── RAMP CONFIG ──────────────────────────────────────────────────────────────
-// Each plant ramps from nominal → 0 over RAMP_STEPS minutes (1 step per minute)
-// Step i (0-based): power = nominal * (1 - (i+1)/RAMP_STEPS)
-// Last step is always exactly 0.
-const RAMP_STEPS = 10; // total minutes to reach 0
 // ──────────────────────────────────────────────────────────────────────────────
 
 // ─── NOMINAL POWER (MW) per plant (display name) ──────────────────────────────
 const NOMINAL: Record<string, number> = {
-  "WF-VALE GRANDE":      12,
-  "PV-SÃOMARCOS":        49,
-  "PV-VIÇOSO":           43,
+  "WF-VALE GRANDE":      12.20,
+  "PV-SÃOMARCOS":        44.9,
+  "PV-VIÇOSO":           25.9,
   "VICOSO BESS":          5,
-  "PV-PEREIRO":          31,
-  "PV-ALBERCAS":         28,
-  "PV-LOGRO":            50,
-  "PV-RIBAGRANDE":       50,
-  "PV-SIERREZUELA":      50,
-  "PV-VALDELAGUA":       50,
-  "PV-ROBLEDO":          50,
-  "PV-ESPLENDOR":        50,
-  "PV-PALABRA":          50,
-  "PV-HAZAÑA":           50,
-  "PV-TALENTO":          50,
-  "PV-EMOCION":          50,
-  "PV-ESCATRON":         50,
-  "PV-ENVITERO":         46,
-  "PV-ESCARNES":         40,
-  "PV-IGNIS":            50,
-  "PV-MEDIOMONTE":       50,
-  "PV-MOCATERO":         40,
-  "PV-VALDECARRO":       50,
-  "PV-VALDIVIESO":       50,
-  "PV-ALCAZAR II":       45,  // maps to PV-ALCAZAR2
-  "PV-ALCAZAR I":        45,  // maps to PV-ALCAZAR1
-  "PV-ICTIO ALCAZAR 1":  50,
-  "PV-ICTIO ALCAZAR 2":  50,
-  "PV-ICTIO ALCAZAR 3":  50,
-  "PV-ICTIO ALBARREAL":  50,
-  "PV-MANZANARES":       36,
-  "PV-PEREA":            50,
-  "PV-EL VEGON":         50,
-  "PV-PITARCO1":         40,
-  "PV-PITARCO3":         12,
-  "PV-PITARCO2":         10,
-  "PV-TOLEDO":           32.5, // Toledo & Ahin split: 65/2
-  "PV-AHÍN":             32.5,
-  "PV-ALMARAZ":          50,
+  "PV-PEREIRO":          43.7,
+  "PV-ALBERCAS":         25.5,
+  "PV-LOGRO":            44.1,
+  "PV-RIBAGRANDE":       38.1,
+  "PV-SIERREZUELA":      38.2,
+  "PV-VALDELAGUA":       40.45,
+  "PV-ROBLEDO":          38.05,
+  "PV-ESPLENDOR":        40.20,
+  "PV-PALABRA":          46,
+  "PV-HAZAÑA":           38.1,
+  "PV-TALENTO":          38.2,
+  "PV-EMOCION":          38.1,
+  "PV-ESCATRON":         38,
+  "PV-ENVITERO":         35,
+  "PV-ESCARNES":         32.8,
+  "PV-IGNIS":            37.9,
+  "PV-MEDIOMONTE":       37.95,
+  "PV-MOCATERO":         30.35,
+  "PV-VALDECARRO":       41,
+  "PV-VALDIVIESO":       41,
+  "PV-ALCAZAR II":       36.08,  // maps to PV-ALCAZAR2
+  "PV-ALCAZAR I":        36.08,  // maps to PV-ALCAZAR1
+  "PV-ICTIO ALCAZAR 1":  44.4,
+  "PV-ICTIO ALCAZAR 2":  44.4,
+  "PV-ICTIO ALCAZAR 3":  44.4,
+  "PV-ICTIO ALBARREAL":  44.2,
+  "PV-MANZANARES":       35.09,
+  "PV-PEREA":            40.8,
+  "PV-EL VEGON":         40.8,
+  "PV-PITARCO1":         30.3,
+  "PV-PITARCO3":         9,
+  "PV-PITARCO2":         8.5,
+  "PV-TOLEDO":           47.19, 
+  "PV-AHÍN":             14.52,
+  "PV-ALMARAZ":          42.03,
 };
 
 // ─── TIERS (visual grouping only — rank = order in ALL_PLANTS) ────────────────
@@ -132,27 +126,11 @@ const PLANT_RANK: Record<string, number> = Object.fromEntries(
 
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 const SUPPLIERS: Record<string, string[]> = {
-  "ALL - complete shutdown": ALL_PLANTS,
+  "ALL": ALL_PLANTS,
   ISOTROL: [
-    "PV-VIÇOSO","VICOSO BESS","WF-VALE GRANDE","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
-    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
-    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
-    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
-    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
-    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
-    "PV-ICTIO ALBARREAL","PV-MANZANARES","PV-PEREA","PV-EL VEGON",
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2","PV-ALMARAZ",
-  ],
-  GALP: [
     "PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS",
-    "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
-    "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
-    "PV-ESCATRON","PV-ENVITERO","PV-ESCARNES","PV-IGNIS","PV-MEDIOMONTE",
-    "PV-MOCATERO","PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I",
-    "PV-ICTIO ALCAZAR 1","PV-ICTIO ALCAZAR 2","PV-ICTIO ALCAZAR 3",
-    "PV-ICTIO ALBARREAL","PV-MANZANARES","PV-PEREA","PV-EL VEGON",
-    "PV-PITARCO1","PV-PITARCO3","PV-PITARCO2",
-  ],
+    "PV-PEREA","PV-EL VEGON","PV-ALMARAZ", "PV-AHÍN", "PV-TOLEDO", "PV-ICTIO ALBARREAL",
+  ], 
   "POWER ELECTRONICS": [
     "PV-LOGRO","PV-RIBAGRANDE","PV-SIERREZUELA","PV-VALDELAGUA","PV-ROBLEDO",
     "PV-ESPLENDOR","PV-PALABRA","PV-HAZAÑA","PV-TALENTO","PV-EMOCION",
@@ -223,7 +201,6 @@ const SUPPLIERS: Record<string, string[]> = {
   GPM: ["PV-PITARCO1","PV-PITARCO3","PV-PITARCO2"],
   "HITACHI ENERGY": ["PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"],
   SOLARIG: ["PV-VALDECARRO","PV-VALDIVIESO","PV-ALCAZAR II","PV-ALCAZAR I"],
-  WHS: ["PV-VIÇOSO","VICOSO BESS","PV-SÃOMARCOS","PV-PEREIRO","PV-ALBERCAS"],
   ELECNOR: ["PV-ICTIO ALBARREAL"],
 };
 
@@ -256,20 +233,21 @@ const buildRamp = (
   systemName: string,
   nominal: number,
   waveStart: Date,
-  endDate: Date
+  endDate: Date,
+  rampSteps: number
 ): string[] => {
   const rows: string[] = [];
 
-  for (let step = 0; step < RAMP_STEPS; step++) {
+  for (let step = 0; step < rampSteps; step++) {
     const stepStart = addMinutes(waveStart, step);
     const stepEnd   = addMinutes(waveStart, step + 1);
-    const factor    = 1 - (step + 1) / RAMP_STEPS; // 0.9, 0.8, ... 0.0
+    const factor    = 1 - (step + 1) / rampSteps; // 0.9, 0.8, ... 0.0
     const power     = nominal * factor;
     rows.push(`${systemName};${formatDate(stepStart)};${formatDate(stepEnd)};${power.toFixed(2)}`);
   }
 
   // Final row: hold at 0 from end of ramp until endDate
-  const rampEnd = addMinutes(waveStart, RAMP_STEPS);
+  const rampEnd = addMinutes(waveStart, rampSteps);
   if (rampEnd < endDate) {
     rows.push(`${systemName};${formatDate(rampEnd)};${formatDate(endDate)};0.00`);
   }
@@ -282,15 +260,16 @@ const buildRampUp = (
   systemName: string,
   nominal: number,
   waveStart: Date,
-  endDate: Date
+  endDate: Date,
+  rampSteps: number
 ): string[] => {
   const rows: string[] = [];
 
   // Ramp up from 0 → nominal
-  for (let step = 0; step < RAMP_STEPS; step++) {
+  for (let step = 0; step < rampSteps; step++) {
     const stepStart = addMinutes(waveStart, step);
     const stepEnd   = addMinutes(waveStart, step + 1);
-    const factor    = (step + 1) / RAMP_STEPS; // 0.1 → 1.0
+    const factor    = (step + 1) / rampSteps; // 0.1 → 1.0
     const power     = nominal * factor;
 
     rows.push(
@@ -299,7 +278,7 @@ const buildRampUp = (
   }
 
   // After ramp: hold nominal until end
-  const rampEnd = addMinutes(waveStart, RAMP_STEPS);
+  const rampEnd = addMinutes(waveStart, rampSteps);
   if (rampEnd < endDate) {
     rows.push(
       `${systemName};${formatDate(rampEnd)};${formatDate(endDate)};${nominal.toFixed(2)}`
@@ -323,6 +302,8 @@ export default function ShutdownCSV() {
   );
   const [output, setOutput] = useState("");
   const [selectedSuppliers, setSelectedSuppliers] = useState<Set<string>>(new Set());
+  const [rampSteps, setRampSteps] = useState(10); // User-configurable ramp duration
+  const [batchSize, setBatchSize] = useState(10); // User-configurable plants per wave
 
   const getEndDate = (): Date => {
     const end = new Date(baseDate);
@@ -398,7 +379,7 @@ export default function ShutdownCSV() {
 
   // Selected plants sorted by global rank
   const selectedByRank = ALL_PLANTS.filter((p) => selected[p]);
-  const numWaves = Math.ceil(selectedByRank.length / BATCH_SIZE) || 1;
+  const numWaves = Math.ceil(selectedByRank.length / batchSize) || 1;
 
   const generate = () => {
     const sh = Number(hour);
@@ -417,17 +398,18 @@ export default function ShutdownCSV() {
     ];
 
     selectedByRank.forEach((plant, idx) => {
-      const wave       = Math.floor(idx / BATCH_SIZE);
+      const wave       = Math.floor(idx / batchSize);
       const waveDelay  = wave * BATCH_INTERVAL_MINUTES;
       const waveStart  = addMinutes(shutdownStart, waveDelay);
       const nominal    = NOMINAL[plant] ?? 50; // fallback 50 MW if missing
       const sysName    = toSystemName(plant);
-      const rampRows   = buildRamp(sysName, nominal, waveStart, end);
+      const rampRows   = buildRamp(sysName, nominal, waveStart, end, rampSteps);
       rows.push(...rampRows);
     });
 
     setOutput(rows.join("\n"));
   };
+  
   const generateActivation = () => {
     const sh = Number(hour);
     const sm = Number(minute);
@@ -450,14 +432,14 @@ export default function ShutdownCSV() {
     const reversed = [...selectedByRank].reverse();
 
     reversed.forEach((plant, idx) => {
-      const wave       = Math.floor(idx / BATCH_SIZE);
+      const wave       = Math.floor(idx / batchSize);
       const waveDelay  = wave * BATCH_INTERVAL_MINUTES;
       const waveStart  = addMinutes(activationStart, waveDelay);
 
       const nominal  = NOMINAL[plant] ?? 50;
       const sysName  = toSystemName(plant);
 
-      const rampRows = buildRampUp(sysName, nominal, waveStart, end);
+      const rampRows = buildRampUp(sysName, nominal, waveStart, end, rampSteps);
       rows.push(...rampRows);
     });
 
@@ -472,7 +454,7 @@ export default function ShutdownCSV() {
     const yyyy = baseDate.getFullYear();
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = `SHUTDOWN_${dd}${mm}${yyyy}.csv`;
+    a.download = `GAS_${dd}${mm}${yyyy}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -483,9 +465,9 @@ export default function ShutdownCSV() {
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-6">
-      <h1 className="text-xl font-bold">Shutdown CSV Generator</h1>
+      <h1 className="text-xl font-bold">GAS - Generation Automatic Shutdown</h1>
       <p className="text-sm text-gray-500">
-        Selected plants ramp from nominal → 0 over {RAMP_STEPS} min, in waves of {BATCH_SIZE} every {BATCH_INTERVAL_MINUTES} min.
+        Select plants ramp from nominal → 0 over {rampSteps} min, in waves of {batchSize} every {BATCH_INTERVAL_MINUTES} min.
         End time is always next day at 23:59.
       </p>
 
@@ -510,7 +492,7 @@ export default function ShutdownCSV() {
       {/* Time */}
       <div className="flex gap-6 items-end flex-wrap">
         <div className="space-y-1">
-          <label className="block text-sm font-medium">Shutdown from</label>
+          <label className="block text-sm font-medium">Start: </label>
           <div className="flex gap-2 items-center">
             <input
               type="number" min="0" max="23" value={hour}
@@ -533,15 +515,49 @@ export default function ShutdownCSV() {
         </div>
       </div>
 
+      {/* Ramp Configuration */}
+      <div className="flex gap-6 items-end flex-wrap">
+        <div className="space-y-1">
+          <label className="block text-sm font-medium">Ramp Duration (minutes)</label>
+          <div className="flex gap-2">
+            {[5, 10, 15, 20].map((mins) => (
+              <button
+                key={mins}
+                onClick={() => setRampSteps(mins)}
+                className={`px-4 py-2 text-sm rounded border transition ${
+                  rampSteps === mins
+                    ? "bg-blue-500 text-white border-blue-600"
+                    : "bg-gray-100 dark:bg-gray-800 border-gray-300"
+                }`}
+              >
+                {mins} min
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="block text-sm font-medium">Plants per Wave</label>
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={batchSize}
+            onChange={(e) => setBatchSize(Math.max(1, Number(e.target.value)))}
+            className="w-24 border rounded px-3 py-2 text-sm dark:bg-gray-800"
+          />
+        </div>
+      </div>
+
       {/* Wave preview */}
       <div className="space-y-1">
         <span className="text-sm font-medium">Wave schedule preview</span>
         <div className="flex flex-wrap gap-2 text-xs">
           {Array.from({ length: numWaves }).map((_, i) => {
             const waveStart   = addMinutes(previewStart, i * BATCH_INTERVAL_MINUTES);
-            const rampEndTime = addMinutes(waveStart, RAMP_STEPS);
-            const from = i * BATCH_SIZE + 1;
-            const to   = Math.min((i + 1) * BATCH_SIZE, selectedByRank.length);
+            const rampEndTime = addMinutes(waveStart, rampSteps);
+            const from = i * batchSize + 1;
+            const to   = Math.min((i + 1) * batchSize, selectedByRank.length);
             return (
               <div key={i} className="border rounded px-2 py-1 bg-gray-50 dark:bg-gray-800">
                 <span className="font-semibold">Wave {i + 1}</span>
@@ -555,31 +571,31 @@ export default function ShutdownCSV() {
       </div>
 
       {/* Supplier */}
-    <div className="space-y-2">
-      <label className="block text-sm font-medium">
-        Shutdown by Entidade / Fornecedor
-      </label>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">
+          Shutdown by Entity / Supplier
+        </label>
 
-      <div className="flex flex-wrap gap-2">
-        {Object.keys(SUPPLIERS).map((supplier) => {
-          const active = selectedSuppliers.has(supplier);
+        <div className="flex flex-wrap gap-2">
+          {Object.keys(SUPPLIERS).map((supplier) => {
+            const active = selectedSuppliers.has(supplier);
 
-          return (
-            <button
-              key={supplier}
-              onClick={() => toggleSupplier(supplier)}
-              className={`px-3 py-1 text-xs rounded border transition
-                ${active
-                  ? "bg-blue-500 text-white border-blue-600"
-                  : "bg-gray-100 dark:bg-gray-800 border-gray-300"}
-              `}
-            >
-              {supplier}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={supplier}
+                onClick={() => toggleSupplier(supplier)}
+                className={`px-3 py-1 text-xs rounded border transition
+                  ${active
+                    ? "bg-blue-500 text-white border-blue-600"
+                    : "bg-gray-100 dark:bg-gray-800 border-gray-300"}
+                `}
+              >
+                {supplier}
+              </button>
+            );
+          })}
+        </div>
       </div>
-</div>
 
       {/* Plant selection */}
       <div className="space-y-3">
@@ -601,7 +617,7 @@ export default function ShutdownCSV() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
               {tier.plants.map((plant) => {
                 const posInSelected = selectedByRank.indexOf(plant);
-                const wave = posInSelected >= 0 ? Math.floor(posInSelected / BATCH_SIZE) + 1 : null;
+                const wave = posInSelected >= 0 ? Math.floor(posInSelected / batchSize) + 1 : null;
                 const nominal = NOMINAL[plant] ?? 50;
                 return (
                   <label key={plant} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -629,15 +645,15 @@ export default function ShutdownCSV() {
       {/* Actions */}
       <div className="flex gap-2 flex-wrap">
         <Button onClick={generate}>
-          Generate Shutdown CSV
+          Generate GAS CSV
         </Button>
 
         <Button onClick={generateActivation} variant="secondary">
-          Generate Activation CSV
+          Generate Restart CSV
         </Button>
 
         {output && output.includes(";") && (
-          <Button onClick={download}>Download CSV</Button>
+          <Button onClick={download}>Download Generated CSV</Button>
         )}
       </div>
 

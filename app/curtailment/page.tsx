@@ -461,7 +461,7 @@ export default function CurtailmentPlanner() {
 
       // Helper to round to 5/-5 only if close enough (within 0.5), otherwise use actual value
       const smartRound = (value: number, target: number): number => {
-        if (Math.abs(Math.abs(value) - target) <= 0.5) {
+        if (Math.abs(Math.abs(value) - target) <= 0.2) {
           return target * Math.sign(value);
         }
         return value;
