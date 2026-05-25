@@ -52,10 +52,8 @@ const NOMINAL: Record<string, number> = {
 };
 
 // ─── TIERS (visual grouping only — rank = order in ALL_PLANTS) ────────────────
-const TIERS: { label: string; color: string; plants: string[] }[] = [
+const TIERS: {plants: string[] }[] = [
   {
-    label: "Group A",
-    color: "border-red-500 bg-red-50 dark:bg-red-950/20",
     plants: [
       "PV-VIÇOSO",
       "VICOSO BESS",
@@ -75,8 +73,6 @@ const TIERS: { label: string; color: string; plants: string[] }[] = [
     ],
   },
   {
-    label: "Group B",
-    color: "border-orange-500 bg-orange-50 dark:bg-orange-950/20",
     plants: [
       "PV-EMOCION",
       "PV-ESCATRON",
@@ -92,8 +88,7 @@ const TIERS: { label: string; color: string; plants: string[] }[] = [
     ],
   },
   {
-    label: "Group C",
-    color: "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20",
+
     plants: [
       "PV-ICTIO ALCAZAR 1",
       "PV-ICTIO ALCAZAR 2",
@@ -105,8 +100,6 @@ const TIERS: { label: string; color: string; plants: string[] }[] = [
     ],
   },
   {
-    label: "Group D",
-    color: "border-green-500 bg-green-50 dark:bg-green-950/20",
     plants: [
       "PV-PITARCO1",
       "PV-PITARCO3",
@@ -327,19 +320,6 @@ export default function ShutdownCSV() {
     setSelectedDate("tomorrow");
   };
 
-  const toggleTier = (plants: string[]) => {
-    const allOn = plants.every((p) => selected[p]);
-    setSelected((prev) => {
-      const next = { ...prev };
-      plants.forEach((p) => (next[p] = !allOn));
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    const allOn = ALL_PLANTS.every((p) => selected[p]);
-    setSelected(Object.fromEntries(ALL_PLANTS.map((p) => [p, !allOn])));
-  };
 
   const toggleSupplier = (supplier: string) => {
     setSelectedSuppliers((prev) => {
@@ -399,7 +379,7 @@ export default function ShutdownCSV() {
 
     selectedByRank.forEach((plant, idx) => {
       const wave       = Math.floor(idx / batchSize);
-      const waveDelay  = wave * BATCH_INTERVAL_MINUTES;
+      const waveDelay = wave * rampSteps;
       const waveStart  = addMinutes(shutdownStart, waveDelay);
       const nominal    = NOMINAL[plant] ?? 50; // fallback 50 MW if missing
       const sysName    = toSystemName(plant);
@@ -433,7 +413,7 @@ export default function ShutdownCSV() {
 
     reversed.forEach((plant, idx) => {
       const wave       = Math.floor(idx / batchSize);
-      const waveDelay  = wave * BATCH_INTERVAL_MINUTES;
+      const waveDelay = wave * rampSteps;
       const waveStart  = addMinutes(activationStart, waveDelay);
 
       const nominal  = NOMINAL[plant] ?? 50;
@@ -467,7 +447,7 @@ export default function ShutdownCSV() {
     <div className="p-4 max-w-3xl mx-auto space-y-6">
       <h1 className="text-xl font-bold">GAS - Generation Automatic Shutdown</h1>
       <p className="text-sm text-gray-500">
-        Select plants ramp from nominal → 0 over {rampSteps} min, in waves of {batchSize} every {BATCH_INTERVAL_MINUTES} min.
+        Select plants ramp from nominal → 0 over {rampSteps} min, in waves of {batchSize} every {rampSteps} min.
         End time is always next day at 23:59.
       </p>
 
@@ -554,7 +534,7 @@ export default function ShutdownCSV() {
         <span className="text-sm font-medium">Wave schedule preview</span>
         <div className="flex flex-wrap gap-2 text-xs">
           {Array.from({ length: numWaves }).map((_, i) => {
-            const waveStart   = addMinutes(previewStart, i * BATCH_INTERVAL_MINUTES);
+            const waveStart = addMinutes(previewStart, i * rampSteps);
             const rampEndTime = addMinutes(waveStart, rampSteps);
             const from = i * batchSize + 1;
             const to   = Math.min((i + 1) * batchSize, selectedByRank.length);
@@ -573,7 +553,7 @@ export default function ShutdownCSV() {
       {/* Supplier */}
       <div className="space-y-2">
         <label className="block text-sm font-medium">
-          Shutdown by Entity / Supplier
+          Shutdown by  Supplier
         </label>
 
         <div className="flex flex-wrap gap-2">
@@ -597,50 +577,61 @@ export default function ShutdownCSV() {
         </div>
       </div>
 
-      {/* Plant selection */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">Select plants to shut down</label>
-          <button onClick={toggleAll} className="text-xs text-blue-500 underline">
-            {ALL_PLANTS.every((p) => selected[p]) ? "Deselect all" : "Select all"}
-          </button>
-        </div>
+    {/* Plant selection */}
+<div className="space-y-3">
+  <label className="text-sm font-medium">
+    Select plants to shutdown
+  </label>
 
-        {TIERS.map((tier) => (
-          <div key={tier.label} className={`border rounded-lg p-3 space-y-2 ${tier.color}`}>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-sm">{tier.label}</span>
-              <button onClick={() => toggleTier(tier.plants)} className="text-xs text-blue-500 underline">
-                {tier.plants.every((p) => selected[p]) ? "Deselect" : "Select"} all
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-              {tier.plants.map((plant) => {
-                const posInSelected = selectedByRank.indexOf(plant);
-                const wave = posInSelected >= 0 ? Math.floor(posInSelected / batchSize) + 1 : null;
-                const nominal = NOMINAL[plant] ?? 50;
-                return (
-                  <label key={plant} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selected[plant] ?? false}
-                      onChange={() => setSelected((prev) => ({ ...prev, [plant]: !prev[plant] }))}
-                    />
-                    <span className="text-gray-400 dark:text-gray-500 font-mono text-xs w-5 shrink-0">
-                      #{PLANT_RANK[plant]}
-                    </span>
-                    <span className="truncate flex-1">{plant}</span>
-                    <span className="text-gray-400 text-xs shrink-0">{nominal} MW</span>
-                    {wave !== null && (
-                      <span className="text-xs font-medium text-blue-500 shrink-0">W{wave}</span>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 border rounded-lg p-3">
+    {ALL_PLANTS.map((plant) => {
+      const posInSelected = selectedByRank.indexOf(plant);
+
+      const wave =
+        posInSelected >= 0
+          ? Math.floor(posInSelected / batchSize) + 1
+          : null;
+
+      const nominal = NOMINAL[plant] ?? 50;
+
+      return (
+        <label
+          key={plant}
+          className="flex items-center gap-2 text-sm cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            checked={selected[plant] ?? false}
+            onChange={() =>
+              setSelected((prev) => ({
+                ...prev,
+                [plant]: !prev[plant],
+              }))
+            }
+          />
+
+          <span className="text-gray-400 dark:text-gray-500 font-mono text-xs w-5 shrink-0">
+            #{PLANT_RANK[plant]}
+          </span>
+
+          <span className="truncate flex-1">
+            {plant}
+          </span>
+
+          <span className="text-gray-400 text-xs shrink-0">
+            {nominal} MW
+          </span>
+
+          {wave !== null && (
+            <span className="text-xs font-medium text-blue-500 shrink-0">
+              W{wave}
+            </span>
+          )}
+        </label>
+      );
+    })}
+  </div>
+</div>
 
       {/* Actions */}
       <div className="flex gap-2 flex-wrap">
