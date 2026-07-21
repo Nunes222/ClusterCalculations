@@ -433,7 +433,7 @@ export default function CurtailmentPlanner() {
     // BESS CURVE FORMAT
     // =======================================
     if (isBESSCurveFormat) {
-      const site = "VICOSO BESS";
+      const site = "G-ALC-VICOSO BESS";
       type Entry = { start: Date; end: Date; power: number };
       const entries: Entry[] = [];
 
