@@ -5,17 +5,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/BackButton";
 
-const plantNameMap: Record<string, string> = {
-  VALEGRANDE: "WF-VALE GRANDE",
-  PEREA: "PV-PEREA",
-  VEGON: "PV-EL VEGON",
-  ESCATRON: "PV-ESCATRON",
-  ENVITERO: "PV-ENVITERO",
-  LOGRO: "PV-LOGRO",
-  "TORRE BELA": "NON-PV-TORRE BELA BASE",
-  "SOBREEQUI TORRE BELA": "NON-PV-TORRE BELA REEQUIPAMIENTO",
-  "RIO MAIOR": "NON-PV-RIO MAIOR BASE",
-  "SOBREEQUIP RIO MAIOR": "NON-PV-RIO MAIOR REEQUIPAMIENTO",
+// Helper to guarantee standard site formatting (removes spaces around hyphens, double spaces, etc.)
+const formatSiteName = (site: string) =>
+  site
+    .replace(/\s*-\s*/g, "-") // Normalizes "OPDE - PENA" -> "OPDE-PENA"
+    .replace(/\s+/g, " ")
+    .trim();
+
+const rawPlantNameMap: Record<string, string> = {
+  VALEGRANDE: "G-VGR-VALE GRANDE",
+  PEREA: "G-PVG-PEREA",
+  VEGON: "G-PVG-VEGON",
+  ESCATRON: "G-ESC1-ESCATRON",
+  ENVITERO: "G-ESC1-ENVITERO",
+  LOGRO: "G-CHP-LOGRO",
+  "TORRE BELA": "NON-TORRE BELA BASE",
+  "SOBREEQUI TORRE BELA": "NON-TORRE BELA REEQ",
+  "RIO MAIOR": "NON-RIO MAIOR BASE",
+  "SOBREEQUIP RIO MAIOR": "NON-RIO MAIOR REEQ",
+
   AURIGA: "PV-AURIGA SOLAR",
   "BELINCHON I": "PV-BELINCHON I",
   CEPHEUS: "PV-CEPHEUS SOLAR",
@@ -26,45 +34,74 @@ const plantNameMap: Record<string, string> = {
   "TELESTO 7": "PV-TELESTO SOLAR 7",
   RHEA: "PV-RHEA SOLAR",
   HINOJOSAS: "PV-HINOJOSAS I",
-  ALBERCAS: "PV-ALBERCAS",
-  ALBARREAL: "PV-ICTIO ALBARREAL",
-  "SÃO MARCOS": "PV-SÃOMARCOS",
-  "SAO MARCOS": "PV-SÃOMARCOS",
-  VIÇOSO: "PV-VIÇOSO",
-  PEREIRO: "PV-PEREIRO",
+
+  ALBERCAS: "G-ALC-ALBERCAS",
+  ALBARREAL: "G-IAB-ALBARREAL",
+
+  "SÃO MARCOS": "G-ALC-SAO MARCOS",
+  "SAO MARCOS": "G-ALC-SAO MARCOS",
+
+  VIÇOSO: "G-ALC-VICOSO",
+  PEREIRO: "G-ALC-PEREIRO",
+
   PEREIRO2: "PV-PEREIRO2",
   TRINDADE: "GBT-PV-TRINDADE",
-  "FV_DOURO": "SDX-PV-DOURO SOLAR BASE",
-  "FV_DOURO REPOWERING": "SDX-PV-DOURO SOLAR REEQ",
-  MONTEGORDO: "SAT-WF MONTEGORDO",
+  "PV-Trindade": "GBT-PV-TRINDADE",
+
+  FV_DOURO: "SDX-DOURO SOLAR BASE",
+  "FV_DOURO REPOWERING": "SDX-DOURO SOLAR REEQ",
+
+  MONTEGORDO: "SAT-MONTEGORDO",
   "PE LAS VEGAS": "SAT-VEGAS",
   "PE LOS ISLETES": "SAT-ISLETES",
   "PE ISLETES": "SAT-ISLETES",
+
   "PE SERÓN II": "SAT-SERON II",
+
   "PE ABUELA SANTA ANA I": "SAT-ABUELA SANTA ANA",
   "PE ABUELA SANTA ANA": "SAT-ABUELA SANTA ANA",
   "PE ABUELA SANTA": "SAT-ABUELA SANTA ANA",
+
   "PE TIJOLA": "SAT-TIJOLA",
   "PE SERÓN I": "SAT-SERON I",
   "PE LA NOGUERA": "SAT-NOGUERA",
+
   "PE COLMENAR II": "SAT-EL COLMENAR II",
-  "FORAL": "NON-FORAL",
-  "VALDECARRO": "PV-VALDECARRO",
-  "ALCAZAR I": "PV-ALCAZAR I",
-  "ALCAZAR II": "PV-ALCAZAR II",
-  "VALDIVIESO": "PV-VALDIVIESO",
-  "VILLAMAYOR I": "OPDE - VILLAMAYOR",
-  "VILLAMAYOR II": "OPDE - VILLAMAYOR",
-  "VILLAMAYOR I & II": "OPDE - VILLAMAYOR",
-  "PEÑA NEBINA": "OPDE - PEÑA NEBINA",
-  "PENA NEBINA": "OPDE - PEÑA NEBINA",
+
+  FORAL: "NON-FORAL",
+
+  VALDECARRO: "G-ALZ-VALDECARRO",
+  "ALCAZAR I": "G-ALZ-ALCAZAR 1",
+  "ALCAZAR II": "G-ALZ-ALCAZAR 2",
+  VALDIVIESO: "G-ALZ-VALDIVIESO",
+
+  "VILLAMAYOR I": "OPDE-VILLAMAYOR",
+  "VILLAMAYOR II": "OPDE-VILLAMAYOR",
+  "VILLAMAYOR I & II": "OPDE-VILLAMAYOR",
+
+  "PEÑA NEBINA": "OPDE-PENA NEBINA",
+  "PENA NEBINA": "OPDE-PENA NEBINA",
 };
 
-// OPDE: keyword-based lookup — if the raw plant field contains these substrings,
-// emit the corresponding site. No splitting or cluster matching needed.
+const normalizePlantName = (name: string) =>
+  name
+    .normalize("NFC")
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+
+const normalizedPlantNameMap: Record<string, string> = Object.fromEntries(
+  Object.entries(rawPlantNameMap).map(([k, v]) => [
+    normalizePlantName(k),
+    formatSiteName(v),
+  ])
+);
+
+// OPDE Keywords linked directly to normalized master keys
 const opdeKeywords: { keyword: string; site: string }[] = [
-  { keyword: "VILLAMAYOR", site: "OPDE - VILLAMAYOR" },
-  { keyword: "NEBINA", site: "OPDE - PEÑA NEBINA" },
+  { keyword: "VILLAMAYOR", site: normalizedPlantNameMap["VILLAMAYOR I"] },
+  { keyword: "NEBINA", site: normalizedPlantNameMap["PENA NEBINA"] },
 ];
 
 const compositePlants: Record<string, { site: string; share: number }[]> = {
@@ -88,7 +125,7 @@ const clusters: Record<string, Record<string, number>> = {
     "SOBREEQUIP RIO MAIOR": 30,
     "TORRE BELA": 50,
     "SOBREEQUI TORRE BELA": 10,
-    "FORAL": 36,
+    FORAL: 36,
   },
   Solaria: {
     AURIGA: 25,
@@ -97,7 +134,7 @@ const clusters: Record<string, Record<string, number>> = {
     "MEDINA DEL CAMPO I": 25,
   },
   Douro: {
-    "FV_DOURO": 100,
+    FV_DOURO: 100,
     "FV_DOURO REPOWERING": 20,
   },
   Valegrande: {
@@ -130,13 +167,11 @@ export default function CurtailmentPlanner() {
     setSelectedDate("tomorrow");
   };
 
-  // Returns OPDE site names found anywhere in the raw plant field string.
-  // e.g. "VILLAMAYOR I & II, y PEÑA NEBINA" → ["OPDE - VILLAMAYOR", "OPDE - PENA NEBINA"]
   const resolveOPDE = (rawField: string): string[] => {
     const upper = rawField.toUpperCase();
     const found: string[] = [];
     for (const { keyword, site } of opdeKeywords) {
-      if (upper.includes(keyword) && !found.includes(site)) {
+      if (site && upper.includes(keyword) && !found.includes(site)) {
         found.push(site);
       }
     }
@@ -187,7 +222,6 @@ export default function CurtailmentPlanner() {
         const end = new Date(baseDate);
         end.setHours(endH, endM, 0, 0);
 
-        // OPDE: check by keyword before any other logic
         const opdeSites = resolveOPDE(parts[0]);
         if (opdeSites.length > 0) {
           for (const site of opdeSites) {
@@ -233,7 +267,7 @@ export default function CurtailmentPlanner() {
           if (clusterName === "Solaria") {
             for (const [parkName] of selectedParks) {
               const site =
-                plantNameMap[parkName.toUpperCase()] ??
+                normalizedPlantNameMap[parkName.toUpperCase()] ??
                 `PV-${parkName.replace(/\s+/g, "").toUpperCase()}`;
               csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
             }
@@ -242,13 +276,13 @@ export default function CurtailmentPlanner() {
             if (totalNominal > 0) {
               for (const [parkName, nominal] of selectedParks) {
                 const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
-                const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
+                const site = normalizedPlantNameMap[parkName.toUpperCase()] ?? parkName;
                 csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
               }
             }
           }
         } else {
-          const site = plantNameMap[rawNames[0]] ?? rawNames[0];
+          const site = normalizedPlantNameMap[rawNames[0]] ?? rawNames[0];
           csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
         }
       }
@@ -271,7 +305,7 @@ export default function CurtailmentPlanner() {
         const rawPlant = cols[0].replace(/^'+/, "").trim().toUpperCase();
         const composite = compositePlants[rawPlant];
         const defaultSite =
-          plantNameMap[rawPlant] ?? plantNameMap[rawPlant.replace(/\s+/g, " ")] ?? rawPlant;
+          normalizedPlantNameMap[rawPlant] ?? normalizedPlantNameMap[rawPlant.replace(/\s+/g, " ")] ?? rawPlant;
 
         for (let c = 1; c < cols.length; c++) {
           if (!cols[c]) continue;
@@ -328,7 +362,7 @@ export default function CurtailmentPlanner() {
         const end = new Date(baseDate);
         end.setHours(endH, endM, 0, 0);
 
-        const site = plantNameMap[rawPlant] ?? rawPlant;
+        const site = normalizedPlantNameMap[rawPlant] ?? rawPlant;
         csvRows.push(`${site};${format(start)};${format(end)};${power.toFixed(2)}`);
       }
 
@@ -361,7 +395,6 @@ export default function CurtailmentPlanner() {
         const end = new Date(baseDate);
         end.setHours(endH, endM, 0, 0);
 
-        // OPDE: check by keyword before any other logic
         const opdeSites = resolveOPDE(parts[0]);
         if (opdeSites.length > 0) {
           for (const site of opdeSites) {
@@ -408,7 +441,7 @@ export default function CurtailmentPlanner() {
         if (clusterName === "Solaria") {
           for (const [parkName] of selectedParks) {
             const site =
-              plantNameMap[parkName.toUpperCase()] ??
+              normalizedPlantNameMap[parkName.toUpperCase()] ??
               `PV-${parkName.replace(/\s+/g, "").toUpperCase()}`;
             csvRows.push(`${site};${format(start)};${format(end)};${clusterSetpoint.toFixed(2)}`);
           }
@@ -420,7 +453,7 @@ export default function CurtailmentPlanner() {
 
         for (const [parkName, nominal] of selectedParks) {
           const allocatedPower = (nominal / totalNominal) * clusterSetpoint;
-          const site = plantNameMap[parkName.toUpperCase()] ?? parkName;
+          const site = normalizedPlantNameMap[parkName.toUpperCase()] ?? parkName;
           csvRows.push(`${site};${format(start)};${format(end)};${allocatedPower.toFixed(2)}`);
         }
       }
@@ -459,7 +492,6 @@ export default function CurtailmentPlanner() {
         entries.push({ start, end, power });
       }
 
-      // Helper to round to 5/-5 only if close enough (within 0.5), otherwise use actual value
       const smartRound = (value: number, target: number): number => {
         if (Math.abs(Math.abs(value) - target) <= 0.2) {
           return target * Math.sign(value);
@@ -520,22 +552,32 @@ export default function CurtailmentPlanner() {
     const yyyy = baseDate.getFullYear();
     const dateStr = `${dd}${mm}${yyyy}`;
 
-    // Detect cluster/plant name from output
     let name = "curtailment";
     const outputUpper = output.toUpperCase();
-    if (outputUpper.includes("NON-PV-RIO MAIOR") || outputUpper.includes("NON-PV-TORRE BELA"))
+
+    if (outputUpper.includes("NON-RIO MAIOR") || outputUpper.includes("NON-TORRE BELA"))
       name = "NEOEN";
     else if (outputUpper.includes("NON-FORAL"))
       name = "FORAL";
     else if (outputUpper.includes("OPDE"))
       name = "OPDE";
-    else if (outputUpper.includes("PV-ALBERCAS") || outputUpper.includes("PV-VIÇOSO") || outputUpper.includes("PV-PEREIRO") || outputUpper.includes("GBT-PV-TRINDADE"))
+    else if (
+      outputUpper.includes("G-ALC-ALBERCAS") ||
+      outputUpper.includes("G-ALC-VICOSO") ||
+      outputUpper.includes("G-ALC-PEREIRO") ||
+      outputUpper.includes("GBT-PV-TRINDADE")
+    )
       name = "Alcoutim";
-    else if (outputUpper.includes("PV-AURIGA") || outputUpper.includes("PV-BELINCHON") || outputUpper.includes("PV-CEPHEUS") || outputUpper.includes("PV-MEDINA"))
+    else if (
+      outputUpper.includes("PV-AURIGA") ||
+      outputUpper.includes("PV-BELINCHON") ||
+      outputUpper.includes("PV-CEPHEUS") ||
+      outputUpper.includes("PV-MEDINA")
+    )
       name = "Solaria";
-    else if (outputUpper.includes("SDX-PV-DOURO"))
+    else if (outputUpper.includes("SDX-DOURO"))
       name = "Douro";
-    else if (outputUpper.includes("WF-VALE GRANDE"))
+    else if (outputUpper.includes("G-VGR-VALE GRANDE"))
       name = "Valegrande";
 
     const a = document.createElement("a");
@@ -557,7 +599,7 @@ export default function CurtailmentPlanner() {
             selectedDate === "today" ? "border-blue-500 ring-2 ring-blue-300" : "border-gray-300"
           }
         >
-          Select Today ({format(new Date(Date.now())).split(" ")[0]})
+          Select Today ({format(new Date()).split(" ")[0]})
         </Button>
         <Button
           onClick={useTomorrow}
