@@ -329,9 +329,6 @@ export default function SolarEnergyWebApp() {
           <Link href="/curtailment">📋 Curtailment Planner</Link>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/shutdown">⛔ Shutdown CSV</Link>
-        </Button>
-        <Button asChild variant="outline">
           <Link href="/secondary">⚡ Secondary Active Power</Link>
         </Button>
       </div>

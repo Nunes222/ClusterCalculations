@@ -512,17 +512,17 @@ export default function CurtailmentPlanner() {
           t2.setMinutes(t2.getMinutes() + 5);
           t3.setMinutes(t3.getMinutes() + 10);
           csvRows.push(`${site};${format(t1)};${format(t2)};${(0.6 * sign).toFixed(2)}`);
-          csvRows.push(`${site};${format(t2)};${format(t3)};${(2.5 * sign).toFixed(2)}`);
+          //csvRows.push(`${site};${format(t2)};${format(t3)};${(2.5 * sign).toFixed(2)}`);
           if (e.end > t3) {
             const finalPower = smartRound(e.power, 5);
-            csvRows.push(`${site};${format(t3)};${format(e.end)};${finalPower.toFixed(2)}`);
+            csvRows.push(`${site};${format(t2)};${format(e.end)};${finalPower.toFixed(2)}`);
           }
           continue;
         }
 
         if (e.power !== 0 && next && next.power === 0) {
           const sign = Math.sign(e.power);
-          csvRows.push(`${site};${format(e.start)};${format(e.end)};${(2.5 * sign).toFixed(2)}`);
+          csvRows.push(`${site};${format(e.start)};${format(e.end)};${(e.power).toFixed(2)}`);
           continue;
         }
 
@@ -544,48 +544,65 @@ export default function CurtailmentPlanner() {
   const pad = (n: number) => (n < 10 ? "0" + n : n);
 
   const downloadCSV = () => {
-    const blob = new Blob([output], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
+  const blob = new Blob([output], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
 
-    const dd = pad(baseDate.getDate());
-    const mm = pad(baseDate.getMonth() + 1);
-    const yyyy = baseDate.getFullYear();
-    const dateStr = `${dd}${mm}${yyyy}`;
+  const dd = pad(baseDate.getDate());
+  const mm = pad(baseDate.getMonth() + 1);
+  const yyyy = baseDate.getFullYear();
+  const dateStr = `${dd}${mm}${yyyy}`;
 
-    let name = "curtailment";
-    const outputUpper = output.toUpperCase();
+  let name = "curtailment";
+  const outputUpper = output.toUpperCase();
 
-    if (outputUpper.includes("NON-RIO MAIOR") || outputUpper.includes("NON-TORRE BELA"))
-      name = "NEOEN";
-    else if (outputUpper.includes("NON-FORAL"))
-      name = "FORAL";
-    else if (outputUpper.includes("OPDE"))
-      name = "OPDE";
-    else if (
-      outputUpper.includes("G-ALC-ALBERCAS") ||
-      outputUpper.includes("G-ALC-VICOSO") ||
-      outputUpper.includes("G-ALC-PEREIRO") ||
-      outputUpper.includes("GBT-PV-TRINDADE")
-    )
-      name = "Alcoutim";
-    else if (
-      outputUpper.includes("PV-AURIGA") ||
-      outputUpper.includes("PV-BELINCHON") ||
-      outputUpper.includes("PV-CEPHEUS") ||
-      outputUpper.includes("PV-MEDINA")
-    )
-      name = "Solaria";
-    else if (outputUpper.includes("SDX-DOURO"))
-      name = "Douro";
-    else if (outputUpper.includes("G-VGR-VALE GRANDE"))
-      name = "Valegrande";
+  // ─────────────────────────────────────────────────────────────
+  // VICOSO QH FORMAT
+  // Example:
+  // Qh-1  23:00  23:15  0  0  10%
+  // Qh-2  23:15  23:30  0  0  10%
+  // ...
+  // ─────────────────────────────────────────────────────────────
+  const isVicosoQhFormat =
+    /QH-\d+\s+\d{2}:\d{2}\s+\d{2}:\d{2}\s+0\s+0\s+10%/i.test(output);
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${name}_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  if (isVicosoQhFormat) {
+    name = "VICOSO1";
+  } else if (
+    outputUpper.includes("NON-RIO MAIOR") ||
+    outputUpper.includes("NON-TORRE BELA")
+  ) {
+    name = "NEOEN";
+  } else if (outputUpper.includes("NON-FORAL")) {
+    name = "FORAL";
+  } else if (outputUpper.includes("OPDE")) {
+    name = "OPDE";
+  } else if (
+    outputUpper.includes("G-ALC-ALBERCAS") ||
+    outputUpper.includes("G-ALC-VICOSO") ||
+    outputUpper.includes("G-ALC-PEREIRO") ||
+    outputUpper.includes("GBT-PV-TRINDADE")
+  ) {
+    name = "Alcoutim";
+  } else if (
+    outputUpper.includes("PV-AURIGA") ||
+    outputUpper.includes("PV-BELINCHON") ||
+    outputUpper.includes("PV-CEPHEUS") ||
+    outputUpper.includes("PV-MEDINA")
+  ) {
+    name = "Solaria";
+  } else if (outputUpper.includes("SDX-DOURO")) {
+    name = "Douro";
+  } else if (outputUpper.includes("G-VGR-VALE GRANDE")) {
+    name = "Valegrande";
+  }
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name}_${dateStr}.csv`;
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
 
   return (
     <div className="p-4 max-w-3xl mx-auto space-y-4">
